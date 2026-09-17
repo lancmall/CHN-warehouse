@@ -1,0 +1,1999 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eric仓库管理系统</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --primary: #2563eb; --primary-dark: #1d4ed8; --bg: #f1f5f9; --card: #ffffff;
+  --text: #1e293b; --text-light: #64748b; --border: #e2e8f0; --danger: #dc2626;
+  --success: #16a34a; --warning: #d97706; --sidebar-w: 240px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+a { text-decoration: none; color: inherit; }
+button { cursor: pointer; border: none; border-radius: 6px; font-size: 14px; padding: 8px 16px; transition: all .15s; }
+input, select, textarea { padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; width: 100%; outline: none; background:#fff; }
+select { cursor: pointer; appearance: auto; -webkit-appearance: auto; }
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-group .opt-btn { padding: 8px 18px; border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; transition: all .15s; }
+.btn-group .opt-btn:hover { border-color: var(--primary); }
+.btn-group .opt-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+
+/* ===== 登录页 ===== */
+.login-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; background: linear-gradient(135deg,#1e3a8a 0%,#2563eb 100%); }
+.login-card { background:#fff; border-radius:16px; padding:40px; width:380px; box-shadow:0 20px 60px rgba(0,0,0,.3); }
+.login-card h1 { text-align:center; font-size:22px; margin-bottom:8px; color:var(--primary-dark); }
+.login-card .sub { text-align:center; color:var(--text-light); font-size:13px; margin-bottom:28px; }
+.login-card .field { margin-bottom:16px; }
+.login-card label { display:block; font-size:13px; color:var(--text-light); margin-bottom:4px; }
+.login-btn { width:100%; background:var(--primary); color:#fff; padding:11px; font-size:15px; margin-top:8px; }
+.login-btn:hover { background:var(--primary-dark); }
+.login-error { color:var(--danger); font-size:13px; text-align:center; margin-top:10px; display:none; }
+
+/* ===== 布局 ===== */
+.app { display:flex; min-height:100vh; }
+.sidebar { width:var(--sidebar-w); background:#1e293b; color:#cbd5e1; flex-shrink:0; position:fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+.sidebar .logo { padding:20px 18px; font-size:16px; font-weight:700; color:#fff; border-bottom:1px solid #334155; }
+.sidebar .nav { padding:10px 0; }
+.sidebar .nav a { display:block; padding:10px 18px; font-size:14px; color:#94a3b8; border-left:3px solid transparent; }
+.sidebar .nav a:hover { background:#334155; color:#fff; }
+.sidebar .nav a.active { background:#334155; color:#fff; border-left-color:var(--primary); }
+.sidebar .nav .section { padding:14px 18px 4px; margin-top:10px; font-size:13px; font-weight:700; color:#e2e8f0; border-top:1px solid #334155; }
+.sidebar .nav .section:first-child { border-top:none; margin-top:0; }
+.main { margin-left:var(--sidebar-w); flex:1; padding:24px; min-width:0; }
+.topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+.topbar h2 { font-size:20px; }
+.topbar .user-info { font-size:13px; color:var(--text-light); }
+.topbar .logout-btn { background:#fee2e2; color:var(--danger); }
+
+/* ===== 卡片 ===== */
+.card { background:var(--card); border-radius:10px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,.06); margin-bottom:16px; }
+.card h3 { font-size:15px; margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+.form-grid { display:flex; flex-direction:column; gap:14px; }
+.form-grid .full { grid-column:1/-1; }
+.form-group label { display:block; font-size:13px; color:var(--text-light); margin-bottom:4px; }
+.form-actions { margin-top:18px; display:flex; gap:10px; }
+.btn-primary { background:var(--primary); color:#fff; }
+.btn-primary:hover { background:var(--primary-dark); }
+.btn-secondary { background:#e2e8f0; color:var(--text); }
+.btn-danger { background:#fee2e2; color:var(--danger); }
+.btn-sm { padding:5px 10px; font-size:12px; }
+
+/* ===== 表格 ===== */
+.table-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th { background:#f8fafc; text-align:center; padding:10px 12px; font-weight:600; color:var(--text-light); border-bottom:2px solid var(--border); white-space:nowrap; }
+td { padding:9px 12px; border-bottom:1px solid var(--border); color:var(--text); text-align:center; }
+tr:hover td { background:#f8fafc; }
+.table-actions { display:flex; gap:6px; justify-content:center; }
+
+/* ===== KPI ===== */
+.kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-bottom:20px; }
+.kpi-card { background:var(--card); border-radius:10px; padding:18px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+.kpi-card .label { font-size:13px; color:var(--text-light); margin-bottom:6px; }
+.kpi-card .value { font-size:24px; font-weight:700; }
+.kpi-card .value.positive { color:var(--success); }
+.kpi-card .value.negative { color:var(--danger); }
+
+.chart-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+@media(max-width:900px){ .chart-row{grid-template-columns:1fr;} .sidebar{width:60px;} .sidebar .logo{font-size:0;} .sidebar .logo::after{content:"E";font-size:18px;} .sidebar .nav a{padding:10px; font-size:0;} .sidebar .nav a::after{content:"≡";font-size:16px;} .main{margin-left:60px;} }
+
+/* ===== 工具条 ===== */
+.toolbar { display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; align-items:center; }
+.toolbar input, .toolbar select { width:auto; min-width:120px; }
+.toolbar .spacer { flex:1; }
+
+.view { display:none; }
+.view.active { display:block; }
+.toast { position:fixed; top:20px; right:20px; background:var(--success); color:#fff; padding:12px 20px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,.15); z-index:9999; display:none; }
+.toast.error { background:var(--danger); }
+</style>
+<style>
+#modalOverlay { position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:999;display:none;align-items:center;justify-content:center;padding:20px }
+#modalBox { background:#fff;border-radius:12px;max-width:700px;width:100%;max-height:85vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.2) }
+#modalHeader { padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:#fff }
+#modalBody { padding:16px 20px }
+</style>
+</head>
+<body>
+
+<!-- 通用详情弹窗 -->
+<div id="modalOverlay" onclick="if(event.target===this)closeModal()">
+  <div id="modalBox">
+    <div id="modalHeader"><b>详情</b><button class="btn-secondary btn-sm" onclick="closeModal()">关闭</button></div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ===== 登录页 ===== -->
+<div id="view-login" class="login-wrap">
+  <div class="login-card">
+    <h1>Eric仓库管理系统</h1>
+    <p class="sub">广州仓库 · 独立站多平台管理</p>
+    <div class="field">
+      <label>账号</label>
+      <input type="text" id="login-user" placeholder="请输入账号">
+    </div>
+    <div class="field">
+      <label>密码</label>
+      <input type="password" id="login-pass" placeholder="请输入密码">
+    </div>
+    <button class="login-btn" onclick="doLogin()">登 录</button>
+    <div class="login-error" id="login-error">账号或密码错误</div>
+  </div>
+</div>
+
+<!-- ===== 员工端 ===== -->
+<div id="view-staff" class="app" style="display:none">
+  <aside class="sidebar">
+    <div class="logo">Eric仓库</div>
+    <nav class="nav">
+      <div class="section">数据录入</div>
+      <a href="#staff/workload" class="nav-link" data-view="staff/workload">每日工作量</a>
+      <a href="#staff/shipment" class="nav-link" data-view="staff/shipment">发货数据</a>
+      <a href="#staff/problem" class="nav-link" data-view="staff/problem">问题件登记</a>
+      <a href="#staff/loss" class="nav-link" data-view="staff/loss">仓库丢失</a>
+      <a href="#staff/arrival" class="nav-link" data-view="staff/arrival">国际物流到货</a>
+      <div class="section">我的记录</div>
+      <a href="#staff/stats" class="nav-link" data-view="staff/stats">工作量排行榜</a>
+      <a href="#staff/records" class="nav-link" data-view="staff/records">我的录入记录</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <h2 id="staff-title">每日工作量</h2>
+      <div>
+        <span class="user-info" id="staff-username"></span>
+        <button class="logout-btn btn-sm" onclick="doLogout()" style="margin-left:10px">退出</button>
+      </div>
+    </div>
+    <div id="staff-content"></div>
+  </main>
+</div>
+
+<!-- ===== 管理后台 ===== -->
+<div id="view-admin" class="app" style="display:none">
+  <aside class="sidebar">
+    <div class="logo">Eric仓库 · 管理后台</div>
+    <nav class="nav">
+      <div class="section">总览</div>
+      <a href="#admin/dashboard" class="nav-link" data-view="admin/dashboard">统计仪表盘</a>
+      <div class="section">快速录入</div>
+      <a href="#staff/workload" class="nav-link" data-view="staff/workload">每日工作量</a>
+      <a href="#staff/shipment" class="nav-link" data-view="staff/shipment">发货数据</a>
+      <a href="#staff/problem" class="nav-link" data-view="staff/problem">问题件登记</a>
+      <a href="#staff/loss" class="nav-link" data-view="staff/loss">仓库丢失</a>
+      <a href="#staff/arrival" class="nav-link" data-view="staff/arrival">国际物流到货</a>
+      <div class="section">业务数据管理</div>
+      <a href="#admin/workload" class="nav-link" data-view="admin/workload">每日工作量</a>
+      <a href="#admin/shipment" class="nav-link" data-view="admin/shipment">发货数据</a>
+      <a href="#admin/problem" class="nav-link" data-view="admin/problem">问题件</a>
+      <a href="#admin/loss" class="nav-link" data-view="admin/loss">仓库丢失</a>
+      <a href="#admin/arrival" class="nav-link" data-view="admin/arrival">国际物流到货</a>
+      <div class="section">财务</div>
+      <a href="#admin/finance" class="nav-link" data-view="admin/finance">财务报表</a>
+      <a href="#admin/fixedcost" class="nav-link" data-view="admin/fixedcost">固定成本</a>
+      <a href="#admin/salary" class="nav-link" data-view="admin/salary">人员工资</a>
+      <div class="section">系统</div>
+      <a href="#admin/users" class="nav-link" data-view="admin/users">账号管理</a>
+      <a href="#admin/options" class="nav-link" data-view="admin/options">表单选项配置</a>
+      <a href="#admin/data" class="nav-link" data-view="admin/data">数据导出/导入</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <h2 id="admin-title">统计仪表盘</h2>
+      <div>
+        <span class="user-info" id="admin-username"></span>
+        <button class="logout-btn btn-sm" onclick="doLogout()" style="margin-left:10px">退出</button>
+      </div>
+    </div>
+    <div id="admin-content"></div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// 数据层：localStorage 存储
+// ============================================================
+const DB_KEY = 'eric_warehouse_db_v1';
+const DEFAULT_DATA = {
+  users: [
+    { id: 1, username: 'FX1999', password: 'FX1999', name: '管理员', role: 'admin' }
+  ],
+  workload: [], shipments: [], problems: [], losses: [], arrivals: [],
+  fixedcosts: [], salaries: [], seq: 1000,
+  costCategories: ['房租','水电','物业','设备折旧','耗材','软件/系统','物流运费','办公费用','其他'],
+  problemTypes: ['货不对版','质量问题','数量不对','商品破损','其他'],
+  responsibleTypes: ['采购','商家','物流','仓库','其他'],
+  solutionTypes: ['退货退款','换货','仅退款','其他'],
+};
+
+function loadDB() {
+  try {
+    const raw = localStorage.getItem(DB_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (!data.costCategories) data.costCategories = DEFAULT_DATA.costCategories;
+      if (!data.problemTypes) data.problemTypes = DEFAULT_DATA.problemTypes;
+      if (!data.responsibleTypes) data.responsibleTypes = DEFAULT_DATA.responsibleTypes;
+      if (!data.solutionTypes) data.solutionTypes = DEFAULT_DATA.solutionTypes;
+      return data;
+    }
+  } catch(e) {}
+  const init = JSON.parse(JSON.stringify(DEFAULT_DATA));
+  localStorage.setItem(DB_KEY, JSON.stringify(init));
+  return init;
+}
+function saveDB() { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+let db = loadDB();
+
+function nextId() { db.seq++; return db.seq; }
+function today() { return new Date().toISOString().slice(0,10); }
+function nowTime() { return new Date().toTimeString().slice(0,5); }
+function monthOf(dateStr) { return (dateStr||'').slice(0,7); }
+function toast(msg, isErr) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isErr ? ' error' : '');
+  t.style.display = 'block';
+  setTimeout(()=>{ t.style.display='none'; }, 2500);
+}
+// Chart安全包装：CDN加载失败时不崩溃
+function safeChart(ctx, config) {
+  if (typeof Chart === 'undefined') {
+    if (ctx && ctx.parentNode) ctx.parentNode.innerHTML = '<p style="color:#94a3b8;padding:20px;text-align:center">图表组件加载中...</p>';
+    return null;
+  }
+  try { return new Chart(ctx, config); } catch(e) { console.warn('Chart error:', e); return null; }
+}
+function fmtMoney(n) { return '¥' + Number(n||0).toLocaleString('zh-CN',{minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+// ============================================================
+// 认证
+// ============================================================
+let currentUser = null;
+const SESSION_KEY = 'eric_warehouse_session';
+
+function doLogin() {
+  const u = document.getElementById('login-user').value.trim();
+  const p = document.getElementById('login-pass').value;
+  const found = db.users.find(x => x.username === u && x.password === p);
+  if (!found) {
+    document.getElementById('login-error').style.display = 'block';
+    return;
+  }
+  document.getElementById('login-error').style.display = 'none';
+  currentUser = found;
+  localStorage.setItem(SESSION_KEY, JSON.stringify({id: found.id, username: found.username, role: found.role, name: found.name}));
+  enterApp();
+}
+
+function doLogout() {
+  currentUser = null;
+  localStorage.removeItem(SESSION_KEY);
+  location.hash = '';
+  showView('login');
+}
+
+function restoreSession() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SESSION_KEY));
+    if (s) {
+      const found = db.users.find(x => x.id === s.id);
+      if (found) { currentUser = found; return true; }
+    }
+  } catch(e) {}
+  return false;
+}
+
+function showView(name) {
+  document.getElementById('view-login').style.display = name === 'login' ? 'flex' : 'none';
+  if (!currentUser) return;
+  // 管理员始终用admin侧边栏；员工用staff侧边栏
+  const useAdmin = currentUser.role === 'admin';
+  document.getElementById('view-staff').style.display = (useAdmin || name.startsWith('login')) ? 'none' : 'flex';
+  document.getElementById('view-admin').style.display = useAdmin ? 'flex' : 'none';
+}
+
+// ============================================================
+// 路由
+// ============================================================
+function enterApp() {
+  if (currentUser.role === 'admin') {
+    document.getElementById('admin-username').textContent = currentUser.name + '（管理员）';
+    location.hash = 'admin/dashboard';
+  } else {
+    document.getElementById('staff-username').textContent = currentUser.name;
+    location.hash = 'staff/workload';
+  }
+  route();
+}
+
+window.addEventListener('hashchange', route);
+function afterSubmit(adminView) {
+  if (currentUser.role === 'admin') {
+    location.hash = adminView;
+  }
+}
+
+function route() {
+  const h = location.hash.slice(1) || (currentUser ? (currentUser.role==='admin' ? 'admin/dashboard' : 'staff/workload') : 'login');
+  if (!currentUser) { showView('login'); return; }
+  showView(h);
+  document.querySelectorAll('.sidebar .nav a').forEach(a => a.classList.remove('active'));
+  const active = document.querySelector('.sidebar .nav a[data-view="'+h+'"]');
+  if (active) active.classList.add('active');
+  try {
+    if (h.startsWith('staff')) {
+      if (currentUser.role === 'admin') {
+        document.getElementById('admin-title').textContent = '';
+        renderStaffTo(h, document.getElementById('admin-content'));
+      } else {
+        renderStaff(h);
+      }
+    } else if (h.startsWith('admin')) {
+      renderAdmin(h);
+    }
+  } catch(e) {
+    console.error('路由错误:', e);
+    document.getElementById('admin-content').innerHTML = '<div class="card"><h3>页面加载出错</h3><p style="color:#ef4444">'+e.message+'</p><p style="color:#64748b">请刷新页面重试，或回到<a href="#admin/dashboard">仪表盘</a></p></div>';
+  }
+}
+
+// 管理员在后台框架内渲染员工端内容
+function renderStaffTo(view, targetEl) {
+  const map = {
+    'staff/workload': staffWorkload,
+    'staff/shipment': staffShipment,
+    'staff/problem': staffProblem,
+    'staff/loss': staffLoss,
+    'staff/arrival': staffArrival,
+    'staff/stats': staffStats,
+    'staff/records': staffRecords,
+  };
+  const fn = map[view] || staffWorkload;
+  // 临时把staff-content和staff-title指向admin的元素
+  const sc = document.getElementById('staff-content');
+  const st = document.getElementById('staff-title');
+  const ac = document.getElementById('admin-content');
+  const at = document.getElementById('admin-title');
+  sc.id = 'staff-content-tmp';
+  st.id = 'staff-title-tmp';
+  ac.id = 'staff-content';
+  at.id = 'staff-title';
+  fn();
+  // 恢复id
+  document.getElementById('staff-content').id = 'admin-content';
+  document.getElementById('staff-title').id = 'admin-title';
+  document.getElementById('staff-content-tmp').id = 'staff-content';
+  document.getElementById('staff-title-tmp').id = 'staff-title';
+}
+
+// ============================================================
+// 员工端：通用表单渲染
+// ============================================================
+function formField(label, name, type, val, options, required) {
+  let input;
+  if (type === 'select') {
+    input = `<input type="hidden" name="${name}" value="${val||''}" ${required?'required':''}>`;
+    input += `<div class="btn-group" data-name="${name}">`;
+    options.forEach(o => {
+      input += `<button type="button" class="opt-btn ${val===o?'active':''}" data-value="${o}" onclick="selectOption(this)">${o}</button>`;
+    });
+    input += `</div>`;
+  } else if (type === 'textarea') {
+    input = `<textarea name="${name}" rows="2" ${required?'required':''}>${val||''}</textarea>`;
+  } else {
+    input = `<input type="${type||'text'}" name="${name}" value="${val||''}" ${required?'required':''}>`;
+  }
+  return `<div class="form-group ${options && options.full ? 'full' : ''}"><label>${label}${required?' *':''}</label>${input}</div>`;
+}
+
+function selectOption(btn) {
+  const group = btn.parentElement;
+  const name = group.dataset.name;
+  group.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const hidden = group.parentElement.querySelector(`input[name="${name}"]`);
+  if (hidden) hidden.value = btn.dataset.value;
+}
+
+function renderForm(title, fields, onSubmit) {
+  document.getElementById('staff-title').textContent = title;
+  const content = document.getElementById('staff-content');
+  let html = `<div class="card"><h3>${title}</h3><form id="dataForm"><div class="form-grid">`;
+  fields.forEach(f => {
+    html += formField(f.label, f.name, f.type, f.val, f.options, f.required);
+  });
+  html += `</div><div class="form-actions"><button type="submit" class="btn-primary">提交</button><button type="reset" class="btn-secondary">重置</button></div></form></div>`;
+  content.innerHTML = html;
+  document.getElementById('dataForm').onsubmit = function(e) {
+    e.preventDefault();
+    const fd = new FormData(this);
+    const obj = {};
+    fd.forEach((v,k) => obj[k] = v);
+    obj.createdBy = currentUser.name;
+    obj.createdAt = new Date().toISOString();
+    onSubmit(obj);
+    this.reset();
+    // 恢复默认日期
+    const dInputs = this.querySelectorAll('input[type="date"]');
+    dInputs.forEach(d => { if (!d.value) d.value = today(); });
+  };
+  // 禁止在输入框/下拉框中按回车提交表单（只有textarea允许回车换行）
+  document.getElementById('dataForm').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+      e.preventDefault();
+    }
+  });
+  // 默认值
+  setTimeout(() => {
+    const dateInputs = content.querySelectorAll('input[type="date"]');
+    dateInputs.forEach(d => { if (!d.value) d.value = today(); });
+  }, 0);
+}
+
+// ===== 员工端：每日工作量 =====
+function staffWorkload() {
+  const isAdmin = currentUser.role === 'admin';
+  const staffNames = db.users.filter(u => u.role !== 'admin').map(u => u.name);
+  document.getElementById('staff-title').textContent = '每日工作量录入';
+
+  let html = `<div class="card"><h3>每日工作量录入</h3><form id="dataForm">`;
+
+  if (isAdmin) {
+    html += `<div class="form-group" style="margin-bottom:14px">
+      <label>为哪位员工录入 *</label>
+      <div class="btn-group" id="staffBtns" style="margin-bottom:8px">`;
+    staffNames.forEach(n => {
+      html += `<button type="button" class="opt-btn" data-value="${n}" onclick="pickWorkloadStaff(this)">${n}</button>`;
+    });
+    html += `</div>
+      <input type="hidden" id="wlStaff" name="staffName" value="">
+      <input type="text" id="wlStaffManual" placeholder="或直接输入临时工姓名" style="margin-top:6px">
+    </div>`;
+  }
+
+  html += `<div class="form-group" style="margin-bottom:14px">
+    <label>日期 *</label>
+    <input type="date" name="date" value="${today()}" required>
+  </div>
+  <div style="display:flex;gap:12px;margin-bottom:14px;align-items:center">
+    <label style="min-width:80px;font-weight:600">上班时间</label>
+    <input type="time" name="startTime" value="${nowTime()}">
+    <label style="min-width:80px;font-weight:600;margin-left:20px">下班时间</label>
+    <input type="time" name="endTime">
+  </div>`;
+
+  ['BD','PK','LK'].forEach(c => {
+    html += `<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px">
+      <div style="font-weight:600;margin-bottom:8px;color:var(--primary)">${c} 国家</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div><label style="font-size:12px;color:var(--text-light)">入库数量</label><input type="number" name="${c}_in" value="0" min="0"></div>
+        <div><label style="font-size:12px;color:var(--text-light)">出库数量</label><input type="number" name="${c}_out" value="0" min="0"></div>
+        <div><label style="font-size:12px;color:var(--text-light)">打包数量</label><input type="number" name="${c}_pack" value="0" min="0"></div>
+      </div>
+    </div>`;
+  });
+
+  html += `<div class="form-actions">
+    <button type="submit" class="btn-primary">提交</button>
+    <button type="reset" class="btn-secondary">重置</button>
+  </div></form></div>`;
+
+  document.getElementById('staff-content').innerHTML = html;
+  document.getElementById('dataForm').onsubmit = function(e) {
+    e.preventDefault();
+    const fd = new FormData(this);
+    const date = fd.get('date');
+    const startTime = fd.get('startTime');
+    const endTime = fd.get('endTime');
+    let staff;
+    if (isAdmin) {
+      const manual = (document.getElementById('wlStaffManual').value || '').trim();
+      staff = manual || fd.get('staffName') || currentUser.name;
+    } else {
+      staff = currentUser.name;
+    }
+    let count = 0;
+    ['BD','PK','LK'].forEach(c => {
+      const inQty = +fd.get(c+'_in') || 0;
+      const outQty = +fd.get(c+'_out') || 0;
+      const packQty = +fd.get(c+'_pack') || 0;
+      if (inQty === 0 && outQty === 0 && packQty === 0) return;
+      db.workload.push({
+        id: nextId(), date, staff, country: c,
+        inQty, outQty, packQty, startTime, endTime,
+        createdBy: currentUser.name, createdAt: new Date().toISOString()
+      });
+      count++;
+    });
+    if (count === 0) { toast('请至少填写一个国家的数据', true); return; }
+    saveDB();
+    toast(`已提交 ${count} 个国家的工作量记录`);
+    if (isAdmin) { location.hash = '#admin/workload'; } else { staffWorkload(); }
+  };
+  document.getElementById('dataForm').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') e.preventDefault();
+  });
+}
+
+function pickWorkloadStaff(btn) {
+  document.querySelectorAll('#staffBtns .opt-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('wlStaff').value = btn.dataset.value;
+  document.getElementById('wlStaffManual').value = '';
+}
+
+// ===== 员工端：发货数据（多纸箱批次录入）=====
+let shipmentBoxes = [];
+
+function staffShipment() {
+  document.getElementById('staff-title').textContent = '发货数据录入';
+  shipmentBoxes = [{ barcode:'', items:'', weight:'', length:'', width:'', height:'' }];
+
+  const todayStr = today();
+  let html = `<div class="card">
+    <h3>新发货批次</h3>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>目的国家 *</label>
+      <div class="btn-group" id="countryBtns">
+        <button type="button" class="opt-btn" data-value="BD" onclick="pickShipCountry(this)">BD 孟加拉</button>
+        <button type="button" class="opt-btn" data-value="LK" onclick="pickShipCountry(this)">LK 斯里兰卡</button>
+        <button type="button" class="opt-btn" data-value="PK" onclick="pickShipCountry(this)">PK 巴基斯坦</button>
+      </div>
+      <input type="hidden" id="shipCountry" value="">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>发货批次号（自动生成）</label>
+      <input type="text" id="shipBatchNo" readonly style="background:#f1f5f9">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>发货日期</label>
+      <input type="date" id="shipDate" value="${todayStr}">
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>纸箱明细</h3>
+    <p style="color:var(--text-light);font-size:13px;margin-bottom:12px">扫码枪扫入纸箱条形码，扫完自动新增下一行。</p>
+    <div id="boxList"></div>
+    <button class="btn-secondary btn-sm" onclick="addBoxRow()">+ 添加纸箱</button>
+  </div>
+
+  <div class="card">
+    <h3>物流与运费</h3>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>物流公司 *</label>
+      <input type="text" id="shipLogistics" placeholder="如：DHL / 顺丰 / 专线">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>国际空运运费单价（元/kg）</label>
+      <input type="number" id="shipRate" step="0.01" oninput="calcShipFreight()" placeholder="如：45">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>总重量</label>
+      <input type="text" id="shipTotalWeight" readonly value="0 kg" style="background:#f1f5f9">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>国际运费（自动计算）</label>
+      <input type="text" id="shipFreight" readonly value="¥0.00" style="background:#f1f5f9;font-weight:700;color:var(--primary)">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>备注</label>
+      <textarea id="shipRemark" rows="2"></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn-primary" onclick="submitShipment()">提交批次</button>
+      <button class="btn-secondary" onclick="staffShipment()">清空重填</button>
+    </div>
+  </div>`;
+
+  document.getElementById('staff-content').innerHTML = html;
+  renderBoxRows();
+}
+
+function pickShipCountry(btn) {
+  document.querySelectorAll('#countryBtns .opt-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const country = btn.dataset.value;
+  document.getElementById('shipCountry').value = country;
+  autoBatchNo(country);
+}
+
+function autoBatchNo(country) {
+  const d = today().replace(/-/g,'');
+  const prefix = country + d;
+  const count = (db.shipments||[]).filter(s => (s.batchNo||'').startsWith(prefix)).length;
+  const seq = String(count + 1).padStart(2, '0');
+  document.getElementById('shipBatchNo').value = prefix + seq;
+}
+
+function renderBoxRows() {
+  const list = document.getElementById('boxList');
+  let html = '<table><thead><tr><th>序号</th><th>纸箱条形码</th><th>商品件数</th><th>重量(kg)</th><th>长×宽×高(cm)</th><th>操作</th></tr></thead><tbody id="boxTbody">';
+  shipmentBoxes.forEach((b, i) => {
+    html += `<tr>
+      <td>${i+1}</td>
+      <td><input type="text" class="box-barcode" value="${b.barcode}" oninput="shipmentBoxes[${i}].barcode=this.value" style="width:160px" placeholder="扫码或输入"></td>
+      <td><input type="number" value="${b.items}" oninput="shipmentBoxes[${i}].items=this.value;calcShipFreight()" style="width:90px"></td>
+      <td><input type="number" step="0.01" value="${b.weight}" oninput="shipmentBoxes[${i}].weight=this.value;calcShipFreight()" style="width:90px"></td>
+      <td style="white-space:nowrap">
+        <input type="number" value="${b.length}" oninput="shipmentBoxes[${i}].length=this.value" style="width:60px" placeholder="长">×
+        <input type="number" value="${b.width}" oninput="shipmentBoxes[${i}].width=this.value" style="width:60px" placeholder="宽">×
+        <input type="number" value="${b.height}" oninput="shipmentBoxes[${i}].height=this.value" style="width:60px" placeholder="高">
+      </td>
+      <td><button class="btn-danger btn-sm" onclick="removeBoxRow(${i})">删</button></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  list.innerHTML = html;
+
+  // 扫码枪输入后自动聚焦下一行条形码
+  const barcodes = list.querySelectorAll('.box-barcode');
+  barcodes.forEach((inp, i) => {
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (i < barcodes.length - 1) {
+          barcodes[i+1].focus();
+        } else {
+          addBoxRow();
+          setTimeout(() => {
+            const all = document.querySelectorAll('.box-barcode');
+            if (all.length > i+1) all[i+1].focus();
+          }, 50);
+        }
+      }
+    });
+  });
+}
+
+function addBoxRow() {
+  shipmentBoxes.push({ barcode:'', items:'', weight:'', length:'', width:'', height:'' });
+  renderBoxRows();
+}
+
+function removeBoxRow(i) {
+  shipmentBoxes.splice(i, 1);
+  renderBoxRows();
+  calcShipFreight();
+}
+
+function calcShipFreight() {
+  const totalWeight = shipmentBoxes.reduce((s,b) => s + (+b.weight||0), 0);
+  const rate = +document.getElementById('shipRate').value || 0;
+  document.getElementById('shipTotalWeight').value = totalWeight.toFixed(2) + ' kg';
+  document.getElementById('shipFreight').value = '¥' + (totalWeight * rate).toFixed(2);
+}
+
+function submitShipment() {
+  const country = document.getElementById('shipCountry').value;
+  const batchNo = document.getElementById('shipBatchNo').value;
+  const date = document.getElementById('shipDate').value;
+  const logistics = document.getElementById('shipLogistics').value.trim();
+  const rate = +document.getElementById('shipRate').value || 0;
+  const remark = document.getElementById('shipRemark').value.trim();
+
+  if (!country) { toast('请选择目的国家', true); return; }
+  if (!logistics) { toast('请填写物流公司', true); return; }
+  const validBoxes = shipmentBoxes.filter(b => b.barcode || b.items || b.weight);
+  if (validBoxes.length === 0) { toast('请至少添加一个纸箱', true); return; }
+
+  const totalWeight = validBoxes.reduce((s,b) => s + (+b.weight||0), 0);
+  const totalItems = validBoxes.reduce((s,b) => s + (+b.items||0), 0);
+  const freight = totalWeight * rate;
+  const staff = currentUser.name;
+
+  validBoxes.forEach((b, i) => {
+    const vol = (b.length && b.width && b.height) ? (b.length*b.width*b.height/1000000).toFixed(4) : 0;
+    db.shipments.push({
+      id: nextId(),
+      batchNo, country, date, staff,
+      barcode: b.barcode,
+      items: +b.items||0,
+      weight: +b.weight||0,
+      length: +b.length||0, width: +b.width||0, height: +b.height||0,
+      volume: vol,
+      logistics, rate, freight: i===0 ? freight : 0,
+      remark: i===0 ? remark : '',
+      boxCount: validBoxes.length,
+      totalWeight, totalItems,
+      createdAt: new Date().toISOString()
+    });
+  });
+
+  saveDB();
+  toast(`批次 ${batchNo} 已提交：${validBoxes.length}个纸箱，${totalItems}件，${totalWeight.toFixed(2)}kg，运费¥${freight.toFixed(2)}`);
+  if (currentUser.role === 'admin') { location.hash = '#admin/shipment'; } else { staffShipment(); }
+}
+
+// ===== 员工端：问题件 =====
+function staffProblem() {
+  renderForm('问题件登记', [
+    {label:'登记日期', name:'date', type:'date', val: today()},
+    {label:'店铺/供应商', name:'shopName', type:'text', required:true, full:true},
+    {label:'订单号', name:'orderNo', type:'text', required:true},
+    {label:'CM条码', name:'cmCode', type:'text'},
+    {label:'商品名称', name:'productName', type:'text'},
+    {label:'商品链接', name:'productUrl', type:'text', full:true},
+    {label:'问题类型', name:'type', type:'select', options: db.problemTypes, required:true},
+    {label:'处理方案', name:'solution', type:'select', options: db.solutionTypes, required:true},
+    {label:'责任方', name:'responsible', type:'select', options: db.responsibleTypes, required:true},
+    {label:'其他说明（选"其他"时填）', name:'otherReason', type:'text', full:true},
+    {label:'发生费用(元)', name:'cost', type:'number'},
+    {label:'费用类型', name:'costType', type:'select', options:['商品费','运输费']},
+    {label:'处理状态', name:'status', type:'select', options:['待处理','处理中','已处理','已关闭']},
+    {label:'备注', name:'remark', type:'textarea', full:true},
+  ], (obj) => {
+    obj.staff = currentUser.name;
+    db.problems.push({id: nextId(), ...obj});
+    saveDB();
+    toast('问题件已登记');
+    afterSubmit('admin/problem');
+  });
+}
+
+// ===== 员工端：仓库丢失 =====
+function staffLoss() {
+  renderForm('仓库丢失登记', [
+    {label:'丢失日期', name:'date', type:'date', val: today()},
+    {label:'目的国家', name:'country', type:'select', options:['BD','LK','PK'], required:true},
+    {label:'CM条码', name:'cmCode', type:'text', required:true},
+    {label:'商品名称', name:'productName', type:'text'},
+    {label:'丢失数量', name:'qty', type:'number', required:true},
+    {label:'单价(元)', name:'unitPrice', type:'number'},
+    {label:'备注', name:'remark', type:'textarea', full:true},
+  ], (obj) => {
+    obj.lossAmount = (Number(obj.qty||0) * Number(obj.unitPrice||0)).toFixed(2);
+    db.losses.push({id: nextId(), ...obj});
+    saveDB();
+    toast('丢失记录已登记');
+    afterSubmit('admin/loss');
+  });
+}
+
+// ===== 员工端：国际物流到货（按纸箱条码关联发货）=====
+function staffArrival() {
+  document.getElementById('staff-title').textContent = '国际物流到货登记';
+  let html = `<div class="card">
+    <h3>到货登记</h3>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>扫描/输入纸箱条形码 *</label>
+      <input type="text" id="arrBarcode" placeholder="扫入纸箱条码，回车自动匹配发货信息" onkeydown="if(event.key==='Enter'){event.preventDefault();lookupShipment();}" style="font-size:16px">
+    </div>
+    <div id="arrMatchedInfo" style="display:none;margin-bottom:14px;padding:12px;background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0">
+      <div style="font-weight:600;margin-bottom:6px;color:#166534">✓ 已匹配发货批次</div>
+      <div id="arrInfoText" style="font-size:14px;color:#166534;line-height:1.8"></div>
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>到货日期</label>
+      <input type="date" id="arrDate" value="${today()}">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>始发国</label>
+      <input type="text" value="中国" readonly style="background:#f1f5f9">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>目的国（自动）</label>
+      <input type="text" id="arrCountry" readonly style="background:#f1f5f9">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>物流公司（自动）</label>
+      <input type="text" id="arrLogistics" readonly style="background:#f1f5f9">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>发货总件数（自动）</label>
+      <input type="text" id="arrTotalItems" readonly style="background:#f1f5f9">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>发货总运费（自动）</label>
+      <input type="text" id="arrFreight" readonly style="background:#f1f5f9">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>运单号</label>
+      <input type="text" id="arrTracking" placeholder="填写运单号">
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>到货情况</h3>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>实际到货件数</label>
+      <input type="number" id="arrActualItems" oninput="calcArrivalStatus()">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>丢件数量</label>
+      <input type="number" id="arrLostQty" value="0" oninput="calcArrivalStatus()">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>丢件损失(元)</label>
+      <input type="number" id="arrLostValue" step="0.01" value="0">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>破损数量</label>
+      <input type="number" id="arrDamagedQty" value="0" oninput="calcArrivalStatus()">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>破损损失(元)</label>
+      <input type="number" id="arrDamagedValue" step="0.01" value="0">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>丢件/破损赔付方</label>
+      <div class="btn-group" id="claimPartyBtns">
+        <button type="button" class="opt-btn" data-value="物流" onclick="pickClaimParty(this)">物流</button>
+        <button type="button" class="opt-btn" data-value="仓库" onclick="pickClaimParty(this)">仓库</button>
+        <button type="button" class="opt-btn" data-value="本地仓库" onclick="pickClaimParty(this)">本地仓库</button>
+      </div>
+      <input type="hidden" id="arrClaimParty" value="">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>备注</label>
+      <textarea id="arrRemark" rows="2"></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn-primary" onclick="submitArrival()">提交到货记录</button>
+      <button class="btn-secondary" onclick="staffArrival()">清空重填</button>
+    </div>
+  </div>`;
+  document.getElementById('staff-content').innerHTML = html;
+}
+
+let matchedShipment = null;
+
+function lookupShipment() {
+  const bc = document.getElementById('arrBarcode').value.trim();
+  if (!bc) { toast('请输入纸箱条形码', true); return; }
+  // 每个纸箱是一条独立发货记录，barcode直接在记录上
+  const found = (db.shipments||[]).find(s => s.barcode === bc);
+  if (!found) {
+    toast('⚠️ 此条形码未在发货记录中找到，请检查后重新输入', true);
+    document.getElementById('arrMatchedInfo').style.display = 'none';
+    document.getElementById('arrCountry').value = '';
+    document.getElementById('arrLogistics').value = '';
+    document.getElementById('arrTotalItems').value = '';
+    document.getElementById('arrFreight').value = '';
+    matchedShipment = null;
+    document.getElementById('arrBarcode').focus();
+    document.getElementById('arrBarcode').select();
+    return;
+  }
+  matchedShipment = found;
+  document.getElementById('arrCountry').value = found.country || '';
+  document.getElementById('arrLogistics').value = found.logistics || '';
+  document.getElementById('arrTotalItems').value = found.totalItems || found.items || 0;
+  document.getElementById('arrFreight').value = '¥' + (found.freight||0).toFixed(2);
+  document.getElementById('arrActualItems').value = found.totalItems || found.items || 0;
+  document.getElementById('arrMatchedInfo').style.display = 'block';
+  document.getElementById('arrInfoText').innerHTML =
+    `批次号：<b>${found.batchNo||'-'}</b> ｜ 国家：<b>${found.country||'-'}</b> ｜ 物流公司：<b>${found.logistics||'-'}</b><br>` +
+    `本箱条码：<b>${bc}</b> ｜ 本箱件数：<b>${found.items||0}</b> ｜ 本箱重量：<b>${found.weight||0}kg</b><br>` +
+    `整批总件数：<b>${found.totalItems||found.items||0}</b> ｜ 整批总重量：<b>${found.totalWeight||found.weight||0}kg</b> ｜ 总运费：<b>¥${(found.freight||0).toFixed(2)}</b>`;
+}
+
+function pickClaimParty(btn) {
+  document.querySelectorAll('#claimPartyBtns .opt-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('arrClaimParty').value = btn.dataset.value;
+}
+
+function calcArrivalStatus() {
+  const total = +document.getElementById('arrTotalItems').value || 0;
+  // 自动算丢件数 = 总件数 - 实际到货 - 破损
+  const actual = +document.getElementById('arrActualItems').value || 0;
+  const damaged = +document.getElementById('arrDamagedQty').value || 0;
+  if (total > 0) {
+    const lost = total - actual - damaged;
+    if (lost >= 0) document.getElementById('arrLostQty').value = lost;
+  }
+}
+
+function submitArrival() {
+  if (!matchedShipment) { toast('请先扫描纸箱条码匹配发货记录', true); return; }
+  const claimParty = document.getElementById('arrClaimParty').value;
+  if (!claimParty) { toast('请选择赔付方', true); return; }
+
+  const obj = {
+    date: document.getElementById('arrDate').value,
+    batchNo: matchedShipment.batchNo,
+    barcode: document.getElementById('arrBarcode').value.trim(),
+    origin: '中国',
+    country: matchedShipment.country,
+    logistics: matchedShipment.logistics,
+    trackingNo: document.getElementById('arrTracking').value.trim(),
+    totalItems: matchedShipment.totalItems || matchedShipment.items || 0,
+    actualItems: +document.getElementById('arrActualItems').value || 0,
+    lostQty: +document.getElementById('arrLostQty').value || 0,
+    lostValue: +document.getElementById('arrLostValue').value || 0,
+    damagedQty: +document.getElementById('arrDamagedQty').value || 0,
+    damagedValue: +document.getElementById('arrDamagedValue').value || 0,
+    claimParty,
+    freight: matchedShipment.freight || 0,
+    remark: document.getElementById('arrRemark').value.trim(),
+    staff: currentUser.name,
+  };
+  obj.intactItems = obj.actualItems - obj.lostQty - obj.damagedQty;
+  db.arrivals.push({id: nextId(), ...obj});
+  saveDB();
+  toast('到货记录已提交');
+  if (currentUser.role === 'admin') { location.hash = '#admin/arrival'; } else { staffArrival(); }
+}
+
+// ===== 员工端：我的记录 =====
+// ============================================================
+// 员工端：工作量排行榜
+// ============================================================
+function staffStats() {
+  document.getElementById('staff-title').textContent = '工作量排行榜';
+  const curMonth = today().slice(0,7);
+  const curDate = today();
+  const mode = window.statsMode || 'month';
+  const month = window.statsMonth || curMonth;
+  const date = window.statsDate || curDate;
+  const weekStart = window.statsWeekStart || getWeekStart(curDate);
+
+  let rows, periodLabel;
+  if (mode === 'day') {
+    rows = (db.workload||[]).filter(r => r.date === date);
+    periodLabel = date;
+  } else if (mode === 'week') {
+    rows = (db.workload||[]).filter(r => r.date >= weekStart && r.date <= curDate);
+    periodLabel = weekStart + ' ~ ' + curDate;
+  } else {
+    rows = (db.workload||[]).filter(r => (r.date||'').startsWith(month));
+    periodLabel = month;
+  }
+
+  const byUser = {};
+  rows.forEach(r => {
+    const n = r.staff || r.name || r.createdBy || '未知';
+    if (!byUser[n]) byUser[n] = { in:0, out:0, pack:0, ship:0 };
+    byUser[n].in  += +r.inQty  || 0;
+    byUser[n].out += +r.outQty || 0;
+    byUser[n].pack+= +r.packQty|| 0;
+    byUser[n].ship+= +r.shipQty|| 0;
+  });
+
+  let arr = Object.entries(byUser).map(([name, v]) => ({
+    name, ...v, items: Math.floor((v.in + v.out + v.pack) / 3)
+  }));
+  arr.sort((a,b) => b.items - a.items);
+
+  const modeBtn = (m, label) => `<button class="btn-sm ${mode===m?'btn-primary':'btn-secondary'}" onclick="window.statsMode='${m}';staffStats()">${label}</button>`;
+
+  let html = `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <h3 style="margin:0">工作量排行</h3>
+      <div style="display:flex;gap:6px;align-items:center">
+        ${modeBtn('day','按日')}${modeBtn('week','按周')}${modeBtn('month','按月')}
+        ${mode==='day' ? `<input type="date" value="${date}" onchange="window.statsDate=this.value;staffStats()" style="width:150px">` : ''}
+        ${mode==='week' ? `<input type="date" value="${weekStart}" onchange="window.statsWeekStart=this.value;staffStats()" style="width:150px">` : ''}
+        ${mode==='month' ? `<input type="month" value="${month}" onchange="window.statsMonth=this.value;staffStats()" style="width:150px">` : ''}
+      </div>
+    </div>`;
+
+  if (arr.length === 0) {
+    html += `<p style="color:var(--text-light)">${periodLabel} 暂无工作量记录</p></div>`;
+    document.getElementById('staff-content').innerHTML = html;
+    return;
+  }
+
+  const medals = ['🥇','🥈','🥉'];
+  html += `<p style="margin-bottom:10px;color:var(--text-light);font-size:13px">统计区间：${periodLabel}（3个操作=1件）</p>`;
+  html += `<div class="table-wrap"><table>
+    <thead><tr><th>排名</th><th>姓名</th><th>入库</th><th>出库</th><th>打包</th><th>商品件数</th><th>对应收入</th></tr></thead><tbody>`;
+  arr.forEach((u, i) => {
+    const isMe = u.name === currentUser.name;
+    const rank = i < 3 ? medals[i] : (i+1);
+    html += `<tr style="${isMe?'background:#eef2ff;font-weight:600':''}">
+      <td style="font-size:18px">${rank}</td>
+      <td>${u.name}${isMe?'（我）':''}</td>
+      <td>${u.in}</td><td>${u.out}</td><td>${u.pack}</td>
+      <td style="font-weight:700">${u.items}</td>
+      <td>¥${(u.items*5).toFixed(0)}</td>
+    </tr>`;
+  });
+  html += `</tbody></table></div></div>`;
+
+  const grand = arr.reduce((s,u) => s+u.items, 0);
+  html += `<div class="card" style="margin-top:14px">
+    <h3 style="margin-bottom:10px">区间汇总</h3>
+    <p style="margin:0;color:var(--text-light)">全员共处理 <b style="color:var(--text)">${grand}</b> 件 · 对应收入 <b style="color:var(--text)">¥${(grand*5).toFixed(0)}</b> · 参与人数 <b style="color:var(--text)">${arr.length}</b> 人</p>
+  </div>`;
+
+  document.getElementById('staff-content').innerHTML = html;
+}
+
+function getWeekStart(d) {
+  const date = new Date(d);
+  const day = date.getDay() || 7;
+  date.setDate(date.getDate() - day + 1);
+  return date.toISOString().slice(0,10);
+}
+
+function staffRecords() {
+  document.getElementById('staff-title').textContent = currentUser.role==='admin' ? '全部录入记录' : '我的录入记录';
+  const isMine = currentUser.role === 'admin' ? () => true : (r => (r.staff === currentUser.name || r.createdBy === currentUser.name || r.name === currentUser.name));
+  const myRecords = {
+    '每日工作量': db.workload.filter(isMine),
+    '发货数据': db.shipments.filter(isMine),
+    '问题件': db.problems.filter(isMine),
+    '仓库丢失': db.losses.filter(isMine),
+    '国际物流到货': db.arrivals.filter(isMine),
+  };
+  let html = '';
+  for (const [type, records] of Object.entries(myRecords)) {
+    html += `<div class="card"><h3>${type}（${records.length}条）</h3>`;
+    if (records.length === 0) { html += '<p style="color:var(--text-light)">暂无记录</p>'; }
+    else {
+      html += '<div class="table-wrap"><table><thead><tr>';
+      const keys = Object.keys(records[0]).filter(k => !['id','createdAt'].includes(k));
+      keys.forEach(k => { html += `<th>${k}</th>`; });
+      html += '</tr></thead><tbody>';
+      records.reverse().slice(0,20).forEach(r => {
+        html += '<tr>';
+        keys.forEach(k => { html += `<td>${r[k]||''}</td>`; });
+        html += '</tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+    html += '</div>';
+  }
+  document.getElementById('staff-content').innerHTML = html;
+}
+
+function renderStaff(view) {
+  const map = {
+    'staff/workload': staffWorkload,
+    'staff/shipment': staffShipment,
+    'staff/problem': staffProblem,
+    'staff/loss': staffLoss,
+    'staff/arrival': staffArrival,
+    'staff/stats': staffStats,
+    'staff/records': staffRecords,
+  };
+  (map[view] || staffWorkload)();
+}
+
+// ============================================================
+// 管理后台：通用数据列表页
+// ============================================================
+const TABLE_CONFIGS = {
+  'admin/workload': { title:'每日工作量', store:'workload', cols:['date','staff','country','inQty','outQty','packQty','startTime','endTime'], colLabels:{date:'日期',staff:'姓名',country:'国家',inQty:'入库',outQty:'出库',packQty:'打包',startTime:'上班',endTime:'下班'} },
+  'admin/shipment': { title:'发货数据', store:'shipments', cols:['batchNo','date','country','barcode','items','weight','volume','logistics','rate','freight','staff'], colLabels:{batchNo:'批次号',date:'日期',country:'目的国',barcode:'纸箱条码',items:'件数',weight:'重量kg',volume:'体积m³',logistics:'物流公司',rate:'单价/kg',freight:'运费',staff:'录入人'} },
+  'admin/problem': { title:'问题件', store:'problems', cols:['date','shopName','orderNo','cmCode','productName','type','responsible','cost','costType','status'], colLabels:{date:'日期',shopName:'店铺/供应商',orderNo:'订单号',cmCode:'CM条码',productName:'商品',type:'类型',responsible:'责任方',cost:'费用',costType:'费用类型',status:'状态'} },
+  'admin/loss': { title:'仓库丢失', store:'losses', cols:['date','country','cmCode','productName','qty','unitPrice','lossAmount'], colLabels:{date:'日期',country:'国家',cmCode:'CM条码',productName:'商品',qty:'数量',unitPrice:'单价',lossAmount:'损失'} },
+  'admin/arrival': { title:'国际物流到货', store:'arrivals', cols:['date','batchNo','barcode','origin','country','logistics','trackingNo','totalItems','actualItems','lostQty','lostValue','damagedQty','damagedValue','claimParty','freight','staff'], colLabels:{date:'到货日',batchNo:'批次号',barcode:'纸箱条码',origin:'始发国',country:'目的国',logistics:'物流',trackingNo:'运单号',totalItems:'总件数',actualItems:'到货件数',lostQty:'丢件数',lostValue:'丢件损失',damagedQty:'破损数',damagedValue:'破损损失',claimParty:'赔付方',freight:'运费',staff:'录入人'} },
+  'admin/fixedcost': { title:'固定成本', store:'fixedcosts', cols:['month','category','item','amount','remark'], colLabels:{month:'月份',category:'类别',item:'项目',amount:'金额',remark:'备注'}, selectFields:{category:'costCategories'} },
+  'admin/salary': { title:'人员工资', store:'salaries', cols:['month','name','baseSalary','bonus','allowance','deduction','netSalary'], colLabels:{month:'月份',name:'姓名',baseSalary:'基本工资',bonus:'绩效',allowance:'补贴',deduction:'扣款',netSalary:'实发工资'} },
+};
+
+function adminTable(view) {
+  const cfg = TABLE_CONFIGS[view];
+  document.getElementById('admin-title').textContent = cfg.title;
+  // 确定分类筛选字段
+  let catField = null, catLabel = '', catOptions = [];
+  if (cfg.cols.includes('category')) { catField = 'category'; catLabel = '类别'; catOptions = [...new Set((db[cfg.store]||[]).map(r=>r.category).filter(Boolean))]; }
+  else if (cfg.cols.includes('type')) { catField = 'type'; catLabel = '类型'; catOptions = [...new Set((db[cfg.store]||[]).map(r=>r.type).filter(Boolean))]; }
+  else if (cfg.cols.includes('country')) { catField = 'country'; catLabel = '国家'; catOptions = [...new Set((db[cfg.store]||[]).map(r=>r.country).filter(Boolean))]; }
+
+  let html = `<div class="card">`;
+  html += `<div class="toolbar">
+    <input type="text" id="searchInput" placeholder="搜索..." oninput="filterTable('${cfg.store}','${view}')">
+    <input type="month" id="monthFilter" style="width:150px" onchange="filterTable('${cfg.store}','${view}')" title="按月份筛选">`;
+  if (catField) {
+    html += `<select id="catFilter" data-field="${catField}" style="width:140px" onchange="filterTable('${cfg.store}','${view}')" title="按${catLabel}筛选">
+      <option value="">全部${catLabel}</option>
+      ${catOptions.map(o=>`<option value="${o}">${o}</option>`).join('')}
+    </select>`;
+  }
+  html += `<span class="spacer"></span>`;
+  html += `<button class="btn-primary btn-sm" onclick="addRecord('${cfg.store}','${view}')">+ 新增</button>`;
+  html += `<button class="btn-secondary btn-sm" onclick="exportCSV('${cfg.store}','${cfg.title}')">导出CSV</button></div>`;
+  html += `<div class="table-wrap"><table id="dataTable"><thead><tr>`;
+  cfg.cols.forEach(c => { html += `<th>${cfg.colLabels[c]||c}</th>`; });
+  html += `<th>操作</th></tr></thead><tbody id="tableBody"></tbody></table></div></div>`;
+  document.getElementById('admin-content').innerHTML = html;
+  renderTableBody(cfg.store, db[cfg.store] || [], cfg);
+}
+
+function statusBadge(v) {
+  const map = {
+    '待处理': '#ef4444',
+    '处理中': '#f59e0b',
+    '已处理': '#10b981',
+    '已完成': '#10b981',
+    '已关闭': '#9ca3af',
+  };
+  const color = map[v] || '#64748b';
+  return `<span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;color:#fff;background:${color}">${v||'-'}</span>`;
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').style.display = 'none';
+}
+
+function copyText(text, btn) {
+  const doCopy = () => {
+    if (btn) {
+      const orig = btn.textContent;
+      btn.textContent = '已复制 ✓';
+      btn.style.background = '#10b981';
+      btn.style.color = '#fff';
+      setTimeout(() => { btn.textContent = orig; btn.style.background = ''; btn.style.color = ''; }, 2000);
+    }
+    toast('已复制：' + text);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(doCopy).catch(() => fallbackCopy(text, doCopy));
+  } else {
+    fallbackCopy(text, doCopy);
+  }
+}
+
+function fallbackCopy(text, cb) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(ta);
+  cb();
+}
+
+function detailRecord(id, store) {
+  const r = db[store].find(x => x.id === id);
+  if (!r) { toast('记录不存在或已被删除', true); return; }
+  let rows = '';
+  for (const [k, v] of Object.entries(r)) {
+    if (k === 'id') continue;
+    let display = (v !== undefined && v !== null && v !== '') ? String(v) : '-';
+    let copyBtn = '';
+    if (k === 'orderNo' || k === 'cmCode' || k === 'productUrl' || k === 'batchNo' || k === 'barcode' || k === 'trackingNo') {
+      copyBtn = `<button class="btn-secondary btn-sm" onclick='copyText(this.dataset.v,this)' data-v="${display.replace(/"/g,'&quot;')}" style="margin-left:6px;padding:1px 8px;font-size:11px">复制</button>`;
+    }
+    if (k === 'productUrl' && v) {
+      display = `<a href="${v}" target="_blank" style="color:var(--primary);word-break:break-all">${v}</a>`;
+    }
+    if (k === 'status') display = statusBadge(v);
+    rows += `<tr><td style="text-align:left;font-weight:600;background:#f8fafc;width:140px">${k}</td><td style="text-align:left;word-break:break-all">${display}${copyBtn}</td></tr>`;
+  }
+  document.getElementById('modalBody').innerHTML =
+    `<div class="table-wrap"><table style="text-align:left">${rows}</table></div>`;
+  document.getElementById('modalHeader').querySelector('b').textContent = '详情 — ID:' + r.id;
+  document.getElementById('modalOverlay').style.display = 'flex';
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').style.display = 'none';
+}
+
+function cycleStatus(id, store, span) {
+  const r = db[store].find(x => x.id === id);
+  if (!r) return;
+  const opts = ['待处理','处理中','已处理','已关闭'];
+  const cur = opts.indexOf(r.status);
+  const next = opts[(cur + 1) % opts.length];
+  r.status = next;
+  saveDB();
+  span.innerHTML = statusBadge(next);
+  toast('状态已改为：' + next);
+}
+
+function renderTableBody(store, records, cfg) {
+  const tbody = document.getElementById('tableBody');
+  if (!tbody) return;
+  let html = '';
+  records.slice().reverse().forEach(r => {
+    html += '<tr>';
+    cfg.cols.forEach(c => {
+      let val = r[c] ?? '';
+      if (c === 'status') {
+        const cur = r.status || '待处理';
+        val = `<span onclick="cycleStatus(${r.id},'${store}',this)" style="cursor:pointer" title="点击修改">${statusBadge(cur)}</span>`;
+      }
+      if (c === 'orderNo' || c === 'cmCode' || c === 'barcode') {
+        val = `${val} <button class="btn-secondary btn-sm" onclick='event.stopPropagation();copyText(this.dataset.v,this)' data-v="${String(val).replace(/"/g,'&quot;')}" style="padding:1px 8px;font-size:11px">复制</button>`;
+      }
+      html += `<td>${val}</td>`;
+    });
+    html += `<td class="table-actions"><button class="btn-secondary btn-sm" onclick="detailRecord(${r.id},'${store}')">详情</button>
+      <button class="btn-secondary btn-sm" onclick="editRecord(${r.id},'${store}','${cfg.title}')">编辑</button>`;
+    html += `<button class="btn-danger btn-sm" onclick="delRecord(${r.id},'${store}')">删除</button></td></tr>`;
+  });
+  tbody.innerHTML = html || '<tr><td colspan="99" style="text-align:center;color:#999">暂无数据</td></tr>';
+}
+
+function filterTable(store, view) {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const monthVal = (document.getElementById('monthFilter')||{}).value || '';
+  const catVal = (document.getElementById('catFilter')||{}).value || '';
+  const catField = (document.getElementById('catFilter')||{}).dataset.field || '';
+  const cfg = TABLE_CONFIGS[view];
+  const records = (db[store]||[]).filter(r => {
+    if (monthVal) {
+      const dateField = r.month || r.date || '';
+      if (!String(dateField).startsWith(monthVal)) return false;
+    }
+    if (catVal && catField) {
+      if (r[catField] !== catVal) return false;
+    }
+    return Object.values(r).some(v => String(v).toLowerCase().includes(q));
+  });
+  renderTableBody(store, records, cfg);
+}
+
+function addRecord(store, view) {
+  const cfg = TABLE_CONFIGS[view];
+  const cols = cfg.cols;
+  let fieldsHtml = '';
+  cols.forEach(c => {
+    if (c === 'id') return;
+    const label = cfg.colLabels[c] || c;
+    let val = '';
+    if (c === 'date' || c === 'month') val = (c==='month') ? today().slice(0,7) : today();
+    if (cfg.selectFields && cfg.selectFields[c]) {
+      const opts = db[cfg.selectFields[c]] || [];
+      let html = `<div class="form-group" style="margin-bottom:14px"><label>${label}</label>`;
+      html += `<input type="hidden" name="${c}" value="${val}">`;
+      html += `<div class="btn-group" data-name="${c}">`;
+      opts.forEach(o => {
+        html += `<button type="button" class="opt-btn ${val===o?'active':''}" data-value="${o}" onclick="selectOption(this)">${o}</button>`;
+      });
+      html += `</div></div>`;
+      fieldsHtml += html;
+    } else {
+      fieldsHtml += `<div class="form-group" style="margin-bottom:10px"><label>${label}</label><input name="${c}" value="${val}"></div>`;
+    }
+  });
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = `<div class="modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;display:flex;align-items:center;justify-content:center">
+    <div class="card" style="width:500px;max-height:80vh;overflow-y:auto">
+    <h3>新增 - ${cfg.title}</h3>${fieldsHtml}
+    <div class="form-actions"><button class="btn-primary" onclick="saveRecord(${Date.now()},'${store}',true)">保存</button>
+    <button class="btn-secondary" onclick="document.querySelector('.modal-overlay').remove()">取消</button></div>
+    </div></div>`;
+  document.body.appendChild(wrapper);
+}
+
+function editRecord(id, store, title) {
+  const rec = (db[store]||[]).find(r => r.id === id);
+  if (!rec) return;
+  const cfg = Object.values(TABLE_CONFIGS).find(c => c.title === title);
+  const cols = cfg.cols.filter(c => c !== 'id');
+  let fieldsHtml = '';
+  cols.forEach(c => {
+    const label = cfg.colLabels[c] || c;
+    const val = rec[c] ?? '';
+    if (c === 'status') {
+      const opts = ['待处理','处理中','已处理','已关闭'];
+      fieldsHtml += `<div class="form-group" style="margin-bottom:14px"><label>${label}</label>`;
+      fieldsHtml += `<input type="hidden" name="status" value="${val}">`;
+      fieldsHtml += `<div class="btn-group" data-name="status">`;
+      opts.forEach(o => {
+        fieldsHtml += `<button type="button" class="opt-btn ${val===o?'active':''}" data-value="${o}" onclick="selectOption(this)">${o}</button>`;
+      });
+      fieldsHtml += `</div></div>`;
+    } else if (cfg.selectFields && cfg.selectFields[c]) {
+      const opts = db[cfg.selectFields[c]] || [];
+      let html = `<div class="form-group" style="margin-bottom:14px"><label>${label}</label>`;
+      html += `<input type="hidden" name="${c}" value="${val}">`;
+      html += `<div class="btn-group" data-name="${c}">`;
+      opts.forEach(o => {
+        html += `<button type="button" class="opt-btn ${val===o?'active':''}" data-value="${o}" onclick="selectOption(this)">${o}</button>`;
+      });
+      html += `</div></div>`;
+      fieldsHtml += html;
+    } else {
+      fieldsHtml += `<div class="form-group" style="margin-bottom:10px"><label>${label}</label><input name="${c}" value="${val}"></div>`;
+    }
+  });
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = `<div class="modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;display:flex;align-items:center;justify-content:center">
+    <div class="card" style="width:500px;max-height:80vh;overflow-y:auto">
+    <h3>编辑 - ${title}</h3>${fieldsHtml}
+    <div class="form-actions"><button class="btn-primary" onclick="saveRecord(${id},'${store}',false)">保存</button>
+    <button class="btn-secondary" onclick="document.querySelector('.modal-overlay').remove()">取消</button></div>
+    </div></div>`;
+  document.body.appendChild(wrapper);
+}
+
+function saveRecord(id, store, isNew) {
+  const overlay = document.querySelector('.modal-overlay');
+  const inputs = overlay.querySelectorAll('input');
+  const obj = {};
+  inputs.forEach(inp => { if (inp.name) obj[inp.name] = inp.value; });
+  if (isNew) {
+    obj.id = nextId();
+    obj.createdBy = currentUser.name;
+    obj.createdAt = new Date().toISOString();
+    db[store].push(obj);
+  } else {
+    const idx = db[store].findIndex(r => r.id === id);
+    if (idx >= 0) db[store][idx] = {...db[store][idx], ...obj};
+  }
+  saveDB();
+  document.querySelector('.modal-overlay').remove();
+  toast('保存成功');
+  route();
+}
+
+function delRecord(id, store) {
+  if (!confirm('确认删除这条记录？')) return;
+  db[store] = db[store].filter(r => r.id !== id);
+  saveDB();
+  toast('已删除');
+  route();
+}
+
+// ============================================================
+// 管理后台：财务报表
+// ============================================================
+function adminFinance() {
+  document.getElementById('admin-title').textContent = '财务报表';
+  const curMonth = today().slice(0,7);
+  const month = window.finMonth || curMonth;
+
+  // 近6个月数组
+  const months = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'));
+  }
+
+  // 收入：当月发货总件数
+  const shipRows = (db.shipments||[]).filter(r => (r.date||'').startsWith(month));
+  const shippedItems = shipRows.reduce((s,r) => s + (+r.items||0), 0);
+  const revenue = shippedItems * 5;
+
+  // 工作量统计（仅展示参考）
+  const rows = (db.workload||[]).filter(r => (r.date||'').startsWith(month));
+  const totalIn  = rows.reduce((s,r) => s + (+r.inQty||0), 0);
+  const totalOut = rows.reduce((s,r) => s + (+r.outQty||0), 0);
+  const totalPack = rows.reduce((s,r) => s + (+r.packQty||0), 0);
+
+  // 固定成本按类别
+  const costs = (db.fixedcosts||[]).filter(r => (r.month||'').startsWith(month));
+  const byCat = {};
+  costs.forEach(c => {
+    const cat = c.category || '其他';
+    byCat[cat] = (byCat[cat]||0) + (+c.amount||0);
+  });
+  const fixedTotal = costs.reduce((s,c) => s + (+c.amount||0), 0);
+
+  // 人员工资
+  const salaries = (db.salaries||[]).filter(r => (r.month||'').startsWith(month));
+  const salaryTotal = salaries.reduce((s,r) => s + (+r.netSalary||0), 0);
+
+  const expense = fixedTotal + salaryTotal;
+  const profit = revenue - expense;
+
+  let html = `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h3 style="margin:0">${month} 财务报表</h3>
+      <input type="month" value="${month}" onchange="window.finMonth=this.value;adminFinance()" style="width:160px">
+    </div>
+    <p style="color:var(--text-light);font-size:13px;margin-bottom:16px">收入规则：按当月实际发货件数 × 5元/件。</p>
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="kpi-card"><div class="label">本月收入</div><div class="value positive">¥${revenue.toLocaleString()}</div></div>
+      <div class="kpi-card"><div class="label">本月支出</div><div class="value negative">¥${expense.toLocaleString()}</div></div>
+      <div class="kpi-card"><div class="label">本月利润</div><div class="value ${profit>=0?'positive':'negative'}">¥${profit.toLocaleString()}</div></div>
+      <div class="kpi-card"><div class="label">发出件数</div><div class="value">${shippedItems}</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>近6个月收支趋势</h3>
+    <canvas id="finTrendChart" height="90"></canvas>
+  </div>
+
+  <div class="card">
+    <h3>近6个月数据对比</h3>
+    <div class="table-wrap"><table id="monthCompareTable">
+      <thead id="monthCompareHead"></thead>
+      <tbody id="monthCompareBody"></tbody>
+    </table></div>
+  </div>
+
+  <div class="card">
+    <h3>固定成本分类 · 近6个月明细</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>类别</th>`;
+  months.forEach(m => html += `<th>${m}</th>`);
+  html += `<th>合计</th></tr></thead><tbody>`;
+  const allCats = [...new Set((db.fixedcosts||[]).map(r=>r.category).filter(Boolean))].sort();
+  allCats.forEach(cat => {
+    let rowTotal = 0;
+    html += `<tr><td style="text-align:left">${cat}</td>`;
+    months.forEach(m => {
+      const amt = (db.fixedcosts||[]).filter(r => (r.month||'').startsWith(m) && r.category === cat).reduce((s,r)=>s+(+r.amount||0),0);
+      rowTotal += amt;
+      html += `<td>${amt > 0 ? '¥'+amt.toLocaleString() : '-'}</td>`;
+    });
+    html += `<td style="font-weight:700">¥${rowTotal.toLocaleString()}</td></tr>`;
+  });
+  // 合计行
+  html += `<tr style="font-weight:700;background:#f8fafc"><td style="text-align:left">每月合计</td>`;
+  let grandTotal = 0;
+  months.forEach(m => {
+    const mTotal = (db.fixedcosts||[]).filter(r => (r.month||'').startsWith(m)).reduce((s,r)=>s+(+r.amount||0),0);
+    grandTotal += mTotal;
+    html += `<td>¥${mTotal.toLocaleString()}</td>`;
+  });
+  html += `<td>¥${grandTotal.toLocaleString()}</td></tr>`;
+  html += '</tbody></table></div></div>';
+
+  html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="card">
+      <h3>本月固定成本</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>类别</th><th>金额(元)</th><th>占比</th></tr></thead><tbody>`;
+  if (Object.keys(byCat).length === 0) {
+    html += '<tr><td colspan="3" style="color:var(--text-light)">本月暂无记录</td></tr>';
+  } else {
+    Object.entries(byCat).sort((a,b) => b[1]-a[1]).forEach(([cat, amt]) => {
+      const pct = fixedTotal > 0 ? (amt/fixedTotal*100).toFixed(1) : 0;
+      html += `<tr><td>${cat}</td><td>¥${amt.toLocaleString()}</td><td>${pct}%</td></tr>`;
+    });
+    html += `<tr style="font-weight:700;background:#f8fafc"><td>合计</td><td>¥${fixedTotal.toLocaleString()}</td><td>100%</td></tr>`;
+  }
+  html += `</tbody></table></div>
+    </div>
+
+    <div class="card">
+      <h3>本月支出汇总</h3>
+      <div class="table-wrap"><table>
+        <tr><td>固定成本合计</td><td>¥${fixedTotal.toLocaleString()}</td></tr>
+        <tr><td>人员工资合计</td><td>¥${salaryTotal.toLocaleString()}</td></tr>
+        <tr style="font-weight:700;background:#fef3c7"><td>总支出</td><td>¥${expense.toLocaleString()}</td></tr>
+      </table></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>工作量参考</h3>
+    <div class="table-wrap"><table>
+      <tr><td>入库总件数</td><td>${totalIn}</td></tr>
+      <tr><td>出库总件数</td><td>${totalOut}</td></tr>
+      <tr><td>打包总件数</td><td>${totalPack}</td></tr>
+      <tr style="font-weight:700;background:#f8fafc"><td>实际发出件数 × 5元</td><td>${shippedItems} 件 × 5元 = ¥${revenue.toLocaleString()}</td></tr>
+    </table></div>
+  </div>`;
+
+  document.getElementById('admin-content').innerHTML = html;
+
+  // 近6个月趋势图
+  const trendRev = [], trendExp = [], trendPro = [];
+  months.forEach(m => {
+    const shipped = (db.shipments||[]).filter(r => (r.date||'').startsWith(m)).reduce((s,r)=>s+(+r.items||0),0);
+    const rev = shipped * 5;
+    const fc = (db.fixedcosts||[]).filter(r => (r.month||'').startsWith(m)).reduce((s,r)=>s+(+r.amount||0),0);
+    const sal = (db.salaries||[]).filter(r => (r.month||'').startsWith(m)).reduce((s,r)=>s+(+r.netSalary||0),0);
+    trendRev.push(rev);
+    trendExp.push(fc+sal);
+    trendPro.push(rev-fc-sal);
+  });
+  if (window.finChart) window.finChart.destroy();
+  window.finChart = safeChart(document.getElementById('finTrendChart'), {
+    type: 'bar',
+    data: {
+      labels: months,
+      datasets: [
+        { label: '收入', data: trendRev, backgroundColor: '#10b981' },
+        { label: '支出', data: trendExp, backgroundColor: '#ef4444' },
+        { label: '利润', type: 'line', data: trendPro, borderColor: '#3b82f6', backgroundColor: '#3b82f6', tension: 0.3 }
+      ]
+    },
+    options: { responsive: true, scales: { y: { beginAtZero: false } } }
+  });
+
+  // 多月对比表
+  let head = '<tr><th>项目</th>';
+  months.forEach(m => head += `<th>${m}</th>`);
+  head += '</tr>';
+  document.getElementById('monthCompareHead').innerHTML = head;
+
+  const compareRows = [
+    ['发出件数', months.map(m => (db.shipments||[]).filter(r => (r.date||'').startsWith(m)).reduce((s,r)=>s+(+r.items||0),0))],
+    ['收入(件数×5)', months.map(m => (db.shipments||[]).filter(r => (r.date||'').startsWith(m)).reduce((s,r)=>s+(+r.items||0),0)*5)],
+    ['固定成本', months.map(m => (db.fixedcosts||[]).filter(r => (r.month||'').startsWith(m)).reduce((s,r)=>s+(+r.amount||0),0))],
+    ['人员工资', months.map(m => (db.salaries||[]).filter(r => (r.month||'').startsWith(m)).reduce((s,r)=>s+(+r.netSalary||0),0))],
+  ];
+  const fcByMonth = months.map(m => (db.fixedcosts||[]).filter(r => (r.month||'').startsWith(m)).reduce((s,r)=>s+(+r.amount||0),0));
+  const salByMonth = months.map(m => (db.salaries||[]).filter(r => (r.month||'').startsWith(m)).reduce((s,r)=>s+(+r.netSalary||0),0));
+  const revByMonth = months.map(m => (db.shipments||[]).filter(r => (r.date||'').startsWith(m)).reduce((s,r)=>s+(+r.items||0),0)*5);
+  compareRows.push(['总支出', months.map((m,i) => fcByMonth[i]+salByMonth[i])]);
+  compareRows.push(['利润', months.map((m,i) => revByMonth[i]-fcByMonth[i]-salByMonth[i])]);
+
+  let body = '';
+  compareRows.forEach(([label, vals]) => {
+    body += `<tr><td style="text-align:left;font-weight:600">${label}</td>`;
+    vals.forEach(v => {
+      const isProfit = label === '利润';
+      const color = isProfit ? (v>=0?'positive':'negative') : '';
+      body += `<td class="${color}">${typeof v === 'number' ? (Number.isInteger(v)?v.toLocaleString():v.toFixed(0)) : v}</td>`;
+    });
+    body += '</tr>';
+  });
+  document.getElementById('monthCompareBody').innerHTML = body;
+}
+function adminDashboard() {
+  document.getElementById('admin-title').textContent = '统计仪表盘';
+  const nowMonth = today().slice(0,7);
+  const month = window.dashMonth || nowMonth;
+
+  const mw = db.workload.filter(r => (r.date||'').slice(0,7) === month);
+  const ms = db.shipments.filter(r => (r.date||'').slice(0,7) === month);
+  const mp = db.problems.filter(r => (r.date||'').slice(0,7) === month);
+  const ml = db.losses.filter(r => (r.date||'').slice(0,7) === month);
+  const ma = db.arrivals.filter(r => (r.date||'').slice(0,7) === month);
+  const mfc = db.fixedcosts.filter(r => r.month === month);
+  const msal = db.salaries.filter(r => r.month === month);
+
+  const totalIn = mw.reduce((s,r)=>s+Number(r.inQty||0),0);
+  const totalOut = mw.reduce((s,r)=>s+Number(r.outQty||0),0);
+  const totalPack = mw.reduce((s,r)=>s+Number(r.packQty||0),0);
+  const totalShip = ms.reduce((s,r)=>s+Number(r.items||0),0);
+  const revenue = totalShip * 5;
+  const fixedCost = mfc.reduce((s,r)=>s+Number(r.amount||0),0);
+  const totalSalary = msal.reduce((s,r)=>s+Number(r.netSalary||(Number(r.baseSalary||0)+Number(r.bonus||0)+Number(r.allowance||0)-Number(r.deduction||0))),0);
+  const problemCostTotal = mp.reduce((s,r)=>s+Number(r.cost||0),0);
+  const isOurWarehouse = v => v === '仓库' || v === '中国仓库' || v === '仓库操作失误';
+  const problemCostOur = mp.filter(r=>isOurWarehouse(r.responsible)).reduce((s,r)=>s+Number(r.cost||0),0);
+  const lossCostTotal = ml.reduce((s,r)=>s+Number(r.lossAmount||0),0);
+  const arrivalLossTotal = ma.reduce((s,r)=>s+Number(r.lostValue||0)+Number(r.damagedValue||0),0);
+  const arrivalLossOur = ma.filter(r=>isOurWarehouse(r.claimParty)).reduce((s,r)=>s+Number(r.lostValue||0)+Number(r.damagedValue||0),0);
+  const totalLossTotal = problemCostTotal + lossCostTotal + arrivalLossTotal;
+  const totalLossOur = problemCostOur + lossCostTotal + arrivalLossOur; // 仓库丢失算自己的
+  const totalCost = fixedCost + totalSalary + totalLossOur; // 只把中国仓库损失算进成本
+  const profit = revenue - totalCost;
+
+  // 人效计算：3个操作(入库+出库+打包)=1件商品
+  const effByUser = {};
+  mw.forEach(r => {
+    const name = r.staff || r.createdBy || r.name || '未知';
+    if (!effByUser[name]) effByUser[name] = {ops:0, days:0, hours:0};
+    effByUser[name].ops += Number(r.inQty||0)+Number(r.outQty||0)+Number(r.packQty||0);
+    effByUser[name].days += 1;
+    if (r.startTime && r.endTime) {
+      const [sh,sm] = r.startTime.split(':').map(Number);
+      const [eh,em] = r.endTime.split(':').map(Number);
+      effByUser[name].hours += (eh+em/60) - (sh+sm/60);
+    }
+  });
+  const teamOps = Object.values(effByUser).reduce((s,d)=>s+d.ops,0);
+  const teamItems = teamOps / 3; // 3个操作=1件
+
+  let html = `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h3 style="margin:0">${month} 经营概览</h3>
+      <input type="month" value="${month}" onchange="window.dashMonth=this.value;adminDashboard()" style="width:160px">
+    </div>
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="kpi-card"><div class="label">发货件数</div><div class="value">${totalShip}</div></div>
+      <div class="kpi-card"><div class="label">仓库收入（5元/件）</div><div class="value positive">${fmtMoney(revenue)}</div></div>
+      <div class="kpi-card"><div class="label">总成本</div><div class="value negative">${fmtMoney(totalCost)}</div></div>
+      <div class="kpi-card"><div class="label">盈亏</div><div class="value ${profit>=0?'positive':'negative'}">${fmtMoney(profit)}</div></div>
+    </div>
+  </div>`;
+
+  // 损失明细 + 饼图
+  html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="card"><h3>损失明细（${month}）</h3>
+      <div class="table-wrap"><table>
+        <tr><td>问题件损失（总）</td><td>${mp.length} 件 · ${fmtMoney(problemCostTotal)}</td></tr>
+        <tr><td>其中：中国仓库责任</td><td>${fmtMoney(problemCostOur)}</td></tr>
+        <tr><td>仓库丢失损失</td><td>${ml.length} 笔 · ${fmtMoney(lossCostTotal)}</td></tr>
+        <tr><td>国际物流损失（总）</td><td>${ma.length} 批 · ${fmtMoney(arrivalLossTotal)}</td></tr>
+        <tr><td>其中：中国仓库责任</td><td>${fmtMoney(arrivalLossOur)}</td></tr>
+        <tr style="background:#fef3c7"><td><b>中国仓库承担合计</b></td><td><b>${fmtMoney(totalLossOur)}</b></td></tr>
+        <tr><td>全部损失合计（含其他责任方）</td><td><b>${fmtMoney(totalLossTotal)}</b></td></tr>
+      </table></div>
+    </div>
+    <div class="card"><h3>损失占比</h3><canvas id="lossPie" height="200"></canvas></div>
+  </div>`;
+
+  // 人效分析（整行宽幅）
+  const salaryByName = {};
+  msal.forEach(s => { salaryByName[s.name] = +s.netSalary || (+s.baseSalary||0)+(+s.bonus||0)+(+s.allowance||0)-(+s.deduction||0); });
+  html += `<div class="card">
+    <h3>人效分析（${month}）</h3>
+    <p style="font-size:12px;color:var(--text-light);margin-bottom:10px">规则：入库+出库+打包每3个操作=1件商品；每件收入5元</p>
+    <div class="table-wrap"><table style="text-align:center">
+      <tr><th style="text-align:center">员工</th><th style="text-align:center">总操作数</th><th style="text-align:center">商品件数</th><th style="text-align:center">出勤天数</th><th style="text-align:center">工时(h)</th><th style="text-align:center">日均件数</th><th style="text-align:center">月工资(元)</th><th style="text-align:center">每件工资成本</th></tr>`;
+  Object.entries(effByUser).forEach(([name,d]) => {
+    const items = Math.round(d.ops/3);
+    const perDay = d.days > 0 ? Math.round(items/d.days) : '-';
+    const sal = salaryByName[name] || 0;
+    const perItem = items > 0 ? '¥' + (sal/items).toFixed(2) : '-';
+    html += `<tr><td style="text-align:center">${name}</td><td style="text-align:center">${d.ops}</td><td style="text-align:center">${items}</td><td style="text-align:center">${d.days}</td><td style="text-align:center">${d.hours ? d.hours.toFixed(1) : '-'}</td><td style="text-align:center"><b>${perDay}</b></td><td style="text-align:center">${sal ? '¥'+sal.toLocaleString() : '-'}</td><td style="text-align:center"><b>${perItem}</b></td></tr>`;
+  });
+  if (Object.keys(effByUser).length === 0) html += '<tr><td colspan="8" style="color:var(--text-light)">本月暂无工作量数据</td></tr>';
+  html += `</table></div></div>`;
+
+  // 人效月度趋势
+  html += `<div class="card"><h3>团队人效月度趋势（人均日处理件数）</h3><canvas id="effTrendChart" height="90"></canvas></div>`;
+  html += `<div class="card"><h3>近6个月盈亏趋势</h3><canvas id="trendChart" height="90"></canvas></div>`;
+
+  document.getElementById('admin-content').innerHTML = html;
+
+  // 人效月度趋势图
+  setTimeout(() => {
+    // 损失占比饼图（中国仓库承担部分），3类全显示
+    const lossData = [problemCostOur, lossCostTotal, arrivalLossOur];
+    const lossLabels = ['问题件(仓库责任)', '仓库丢失', '国际物流(仓库责任)'];
+    if (window.lossChart) window.lossChart.destroy();
+    window.lossChart = safeChart(document.getElementById('lossPie'), {
+      type: 'doughnut',
+      data: { labels: lossLabels, datasets: [{ data: lossData, backgroundColor: ['#f59e0b','#ef4444','#8b5cf6'] }] },
+      plugins: [{
+        id: 'centerText',
+        afterDraw: function(chart) {
+          const total = lossData.reduce((a,b)=>a+b,0);
+          const ctx = chart.ctx;
+          const cx = chart.chartArea.left + (chart.chartArea.right - chart.chartArea.left)/2;
+          const cy = chart.chartArea.top + (chart.chartArea.bottom - chart.chartArea.top)/2;
+          ctx.save();
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.font = 'bold 16px sans-serif';
+          ctx.fillStyle = '#1e293b';
+          ctx.fillText('¥' + total.toLocaleString(), cx, cy - 10);
+          ctx.font = '12px sans-serif';
+          ctx.fillStyle = '#64748b';
+          ctx.fillText('仓库总损失', cx, cy + 12);
+          ctx.restore();
+        }
+      }],
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              generateLabels: function(chart) {
+                const data = chart.data;
+                const total = data.datasets[0].data.reduce((a,b)=>a+b,0);
+                return data.labels.map((label, i) => {
+                  const val = data.datasets[0].data[i];
+                  const pct = total > 0 ? (val/total*100).toFixed(1) : 0;
+                  return {
+                    text: `${label}: ¥${val.toLocaleString()} (${pct}%)`,
+                    fillStyle: data.datasets[0].backgroundColor[i],
+                    strokeStyle: data.datasets[0].backgroundColor[i],
+                    hidden: false, index: i
+                  };
+                });
+              }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
+                const pct = total > 0 ? (ctx.parsed/total*100).toFixed(1) : 0;
+                return ctx.label + ': ¥' + ctx.parsed.toLocaleString() + ' (' + pct + '%)';
+              }
+            }
+          }
+        }
+      }
+    });
+    const r2 = new Date();
+    const months = [];
+    const effData = [];
+    const revData = [], expData = [];
+    for (let i=5; i>=0; i--) {
+      const d = new Date(r2.getFullYear(), r2.getMonth()-i, 1);
+      const mk = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+      months.push(mk);
+      const w = db.workload.filter(x => (x.date||'').slice(0,7)===mk);
+      let ops=0, days=0;
+      w.forEach(r => {
+        ops += Number(r.inQty||0)+Number(r.outQty||0)+Number(r.packQty||0);
+        days += 1;
+      });
+      effData.push(days>0 ? Math.round(ops/3/days) : 0);
+      const s = db.shipments.filter(x => (x.date||'').slice(0,7)===mk);
+      const ship = s.reduce((t,r)=>t+Number(r.items||0),0);
+      revData.push(ship*5);
+      const fc = db.fixedcosts.filter(x=>x.month===mk).reduce((t,r)=>t+Number(r.amount||0),0);
+      const sal = db.salaries.filter(x=>x.month===mk).reduce((t,r)=>t+Number(r.netSalary||0),0);
+      expData.push(fc+sal);
+    }
+    if (window.effChart) window.effChart.destroy();
+    window.effChart = safeChart(document.getElementById('effTrendChart'), {
+      type: 'line',
+      data: { labels: months, datasets: [{ label:'人均日处理件数', data: effData, borderColor:'#3b82f6', backgroundColor:'#3b82f6', tension:0.3, fill:false }] },
+      options: { responsive:true, scales:{y:{beginAtZero:true}} }
+    });
+    if (window.pfChart) window.pfChart.destroy();
+    window.pfChart = safeChart(document.getElementById('trendChart'), {
+      type: 'bar',
+      data: { labels: months, datasets: [
+        { label:'收入', data: revData, backgroundColor:'#10b981' },
+        { label:'支出', data: expData, backgroundColor:'#ef4444' }
+      ] },
+      options: { responsive:true }
+    });
+  }, 100);
+}
+
+// ============================================================
+// 管理后台：账号管理
+// ============================================================
+function adminUsers() {
+  document.getElementById('admin-title').textContent = '账号管理';
+  let html = `<div class="card">
+    <div class="toolbar"><h3 style="margin:0;flex:1">账号列表</h3>
+    <button class="btn-primary btn-sm" onclick="addUser()">+ 新增员工账号</button></div>
+    <div class="table-wrap"><table><thead><tr><th>账号</th><th>姓名</th><th>角色</th><th>操作</th></tr></thead><tbody>`;
+  db.users.forEach(u => {
+    html += `<tr><td>${u.username}</td><td>${u.name}</td><td>${u.role==='admin'?'管理员':'员工'}</td>`;
+    html += `<td class="table-actions">`;
+    if (u.role !== 'admin') {
+      html += `<button class="btn-secondary btn-sm" onclick="editUser(${u.id})">改密码</button>`;
+      html += `<button class="btn-danger btn-sm" onclick="delUser(${u.id})">删除</button>`;
+    } else {
+      html += `<span style="color:#999">—</span>`;
+    }
+    html += `</td></tr>`;
+  });
+  html += `</tbody></table></div></div>`;
+  document.getElementById('admin-content').innerHTML = html;
+}
+
+function addUser() {
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = `<div class="modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;display:flex;align-items:center;justify-content:center">
+    <div class="card" style="width:400px">
+    <h3>新增员工账号</h3>
+    <div class="form-group" style="margin-bottom:10px"><label>账号（用户名）</label><input id="new-username"></div>
+    <div class="form-group" style="margin-bottom:10px"><label>姓名</label><input id="new-name"></div>
+    <div class="form-group" style="margin-bottom:10px"><label>初始密码</label><input id="new-password" type="text"></div>
+    <div class="form-actions"><button class="btn-primary" onclick="saveNewUser()">创建</button>
+    <button class="btn-secondary" onclick="document.querySelector('.modal-overlay').remove()">取消</button></div>
+    </div></div>`;
+  document.body.appendChild(wrapper);
+}
+
+function saveNewUser() {
+  const username = document.getElementById('new-username').value.trim();
+  const name = document.getElementById('new-name').value.trim();
+  const password = document.getElementById('new-password').value.trim();
+  if (!username || !password) { toast('账号和密码不能为空', true); return; }
+  if (db.users.find(u => u.username === username)) { toast('账号已存在', true); return; }
+  db.users.push({ id: nextId(), username, password, name: name||username, role: 'staff' });
+  saveDB();
+  toast('员工账号已创建');
+  document.querySelector('.modal-overlay').remove();
+  adminUsers();
+}
+
+function editUser(id) {
+  const u = db.users.find(x => x.id === id);
+  if (!u) return;
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = `<div class="modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;display:flex;align-items:center;justify-content:center">
+    <div class="card" style="width:400px">
+    <h3>修改密码 - ${u.name}</h3>
+    <div class="form-group" style="margin-bottom:10px"><label>新密码</label><input id="edit-password" type="text"></div>
+    <div class="form-actions"><button class="btn-primary" onclick="savePwd(${id})">保存</button>
+    <button class="btn-secondary" onclick="document.querySelector('.modal-overlay').remove()">取消</button></div>
+    </div></div>`;
+  document.body.appendChild(wrapper);
+}
+
+function savePwd(id) {
+  const pwd = document.getElementById('edit-password').value.trim();
+  if (!pwd) { toast('密码不能为空', true); return; }
+  const u = db.users.find(x => x.id === id);
+  u.password = pwd;
+  saveDB();
+  toast('密码已修改');
+  document.querySelector('.modal-overlay').remove();
+}
+
+function delUser(id) {
+  if (!confirm('确认删除该员工账号？')) return;
+  db.users = db.users.filter(u => u.id !== id);
+  saveDB();
+  toast('账号已删除');
+  adminUsers();
+}
+
+// ============================================================
+// 管理后台：选项管理
+// ============================================================
+function adminOptions() {
+  document.getElementById('admin-title').textContent = '表单选项配置';
+  let html = '';
+  const groups = [
+    {title:'固定成本类别', desc:'用于固定成本录入', dbKey:'costCategories', inputId:'newCostCat', listId:'costCatList'},
+    {title:'问题件类型', desc:'用于问题件登记', dbKey:'problemTypes', inputId:'newProbType', listId:'probTypeList'},
+    {title:'处理方案', desc:'用于问题件登记', dbKey:'solutionTypes', inputId:'newSolType', listId:'solTypeList'},
+    {title:'责任方类型', desc:'用于问题件登记', dbKey:'responsibleTypes', inputId:'newRespType', listId:'respTypeList'},
+  ];
+  groups.forEach(g => {
+    html += `<div class="card">
+      <h3>${g.title}</h3>
+      <p style="margin-bottom:14px;color:var(--text-light);font-size:13px">${g.desc}</p>
+      <div id="${g.listId}"></div>
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <input type="text" id="${g.inputId}" placeholder="输入新选项" style="width:250px">
+        <button class="btn-primary btn-sm" onclick="addOption('${g.dbKey}','${g.inputId}','${g.listId}')">+ 添加</button>
+      </div>
+    </div>`;
+  });
+  document.getElementById('admin-content').innerHTML = html;
+  renderAllOptionLists();
+}
+
+function renderAllOptionLists() {
+  renderOptionList('costCategories','costCatList');
+  renderOptionList('problemTypes','probTypeList');
+  renderOptionList('solutionTypes','solTypeList');
+  renderOptionList('responsibleTypes','respTypeList');
+}
+
+function renderOptionList(dbKey, listId) {
+  const list = document.getElementById(listId);
+  if (!list) return;
+  let html = '<div class="table-wrap"><table><tbody>';
+  db[dbKey].forEach((item, i) => {
+    html += `<tr><td style="width:40px">${i+1}</td><td id="${listId}_name_${i}">${item}</td><td style="text-align:right;white-space:nowrap">
+      <button class="btn-secondary btn-sm" onclick="editOption('${dbKey}',${i},'${listId}')">编辑</button>
+      <button class="btn-danger btn-sm" onclick="delOption('${dbKey}',${i})">删除</button>
+    </td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  list.innerHTML = html;
+}
+
+function editOption(dbKey, idx, listId) {
+  const nameTd = document.getElementById(listId + '_name_' + idx);
+  const oldVal = db[dbKey][idx];
+  nameTd.innerHTML = `<input type="text" id="${listId}_edit_${idx}" value="${oldVal}" style="width:200px" onkeydown="if(event.key==='Enter')saveOptionEdit('${dbKey}',${idx},'${listId}')">`;
+  const input = document.getElementById(listId + '_edit_' + idx);
+  input.focus();
+  input.select();
+}
+
+function saveOptionEdit(dbKey, idx, listId) {
+  const input = document.getElementById(listId + '_edit_' + idx);
+  const newVal = input.value.trim();
+  if (!newVal) { toast('名称不能为空', true); return; }
+  if (db[dbKey].includes(newVal) && newVal !== db[dbKey][idx]) { toast('该名称已存在', true); return; }
+  db[dbKey][idx] = newVal;
+  saveDB();
+  toast('已修改');
+  renderAllOptionLists();
+}
+
+function addOption(dbKey, inputId, listId) {
+  const input = document.getElementById(inputId);
+  const val = input.value.trim();
+  if (!val) { toast('请输入选项名称', true); return; }
+  if (db[dbKey].includes(val)) { toast('该选项已存在', true); return; }
+  db[dbKey].push(val);
+  saveDB();
+  input.value = '';
+  toast('已添加');
+  renderOptionList(dbKey, listId);
+}
+
+function delOption(dbKey, idx) {
+  if (!confirm('确认删除「' + db[dbKey][idx] + '」？已有数据不受影响。')) return;
+  db[dbKey].splice(idx, 1);
+  saveDB();
+  toast('已删除');
+  renderAllOptionLists();
+}
+
+// ============================================================
+// 管理后台：导出/导入
+// ============================================================
+function adminData() {
+  document.getElementById('admin-title').textContent = '数据导出/导入';
+  document.getElementById('admin-content').innerHTML = `
+    <div class="card"><h3>数据导出（备份）</h3>
+      <p style="margin-bottom:14px;color:var(--text-light)">导出全部数据为 JSON 文件，可用于备份或迁移。</p>
+      <button class="btn-primary" onclick="exportAll()">导出全部数据 (JSON)</button>
+    </div>
+    <div class="card"><h3>数据导入（恢复）</h3>
+      <p style="margin-bottom:14px;color:var(--text-light)">从之前导出的 JSON 文件恢复数据（会覆盖当前数据）。</p>
+      <input type="file" id="importFile" accept=".json" style="margin-bottom:14px">
+      <button class="btn-primary" onclick="importAll()">导入数据</button>
+    </div>
+    <div class="card"><h3>单表 CSV 导出</h3>
+      <p style="margin-bottom:14px;color:var(--text-light)">分别导出各类数据为 CSV 文件。</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn-secondary btn-sm" onclick="exportCSV('workload','每日工作量')">工作量CSV</button>
+        <button class="btn-secondary btn-sm" onclick="exportCSV('shipments','发货数据')">发货CSV</button>
+        <button class="btn-secondary btn-sm" onclick="exportCSV('problems','问题件')">问题件CSV</button>
+        <button class="btn-secondary btn-sm" onclick="exportCSV('losses','仓库丢失')">丢失CSV</button>
+        <button class="btn-secondary btn-sm" onclick="exportCSV('arrivals','国际到货')">到货CSV</button>
+      </div>
+    </div>`;
+}
+
+function exportAll() {
+  const blob = new Blob([JSON.stringify(db, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'eric-warehouse-backup-' + today() + '.json';
+  a.click();
+  toast('数据已导出');
+}
+
+function importAll() {
+  const file = document.getElementById('importFile').files[0];
+  if (!file) { toast('请先选择文件', true); return; }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.users || !data.workload) { toast('文件格式不正确', true); return; }
+      if (!confirm('导入将覆盖当前所有数据，确认继续？')) return;
+      db = data;
+      saveDB();
+      toast('数据导入成功');
+      route();
+    } catch(err) { toast('文件解析失败', true); }
+  };
+  reader.readAsText(file);
+}
+
+function exportCSV(store, name) {
+  const records = db[store] || [];
+  if (records.length === 0) { toast('暂无数据可导出', true); return; }
+  const keys = Object.keys(records[0]);
+  let csv = keys.join(',') + '\n';
+  records.forEach(r => {
+    csv += keys.map(k => `"${(r[k]??'').toString().replace(/"/g,'""')}"`).join(',') + '\n';
+  });
+  const blob = new Blob(['\ufeff' + csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name + '-' + today() + '.csv';
+  a.click();
+  toast('CSV已导出');
+}
+
+// ============================================================
+// 管理后台路由
+// ============================================================
+function renderAdmin(view) {
+  const map = {
+    'admin/dashboard': adminDashboard,
+    'admin/finance': adminFinance,
+    'admin/users': adminUsers,
+    'admin/options': adminOptions,
+    'admin/data': adminData,
+  };
+  if (map[view]) { map[view](); return; }
+  if (TABLE_CONFIGS[view]) { adminTable(view); return; }
+  adminDashboard();
+}
+
+// ============================================================
+// 启动
+// ============================================================
+if (restoreSession()) {
+  enterApp();
+} else {
+  showView('login');
+}
+document.getElementById('login-pass').addEventListener('keypress', e => { if (e.key === 'Enter') doLogin(); });
+
+</script>
