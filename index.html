@@ -138,6 +138,7 @@ tr:hover td { background:#f8fafc; }
       <a href="#staff/problem" class="nav-link" data-view="staff/problem">问题件登记</a>
       <a href="#staff/loss" class="nav-link" data-view="staff/loss">仓库丢失</a>
       <a href="#staff/arrival" class="nav-link" data-view="staff/arrival">国际物流到货</a>
+      <a href="#staff/expense" class="nav-link" data-view="staff/expense">临时费用登记</a>
       <div class="section">我的记录</div>
       <a href="#staff/stats" class="nav-link" data-view="staff/stats">工作量排行榜</a>
       <a href="#staff/records" class="nav-link" data-view="staff/records">我的录入记录</a>
@@ -161,7 +162,8 @@ tr:hover td { background:#f8fafc; }
     <div class="logo">Eric仓库 · 管理后台</div>
     <nav class="nav">
       <div class="section">总览</div>
-      <a href="#admin/dashboard" class="nav-link" data-view="admin/dashboard">统计仪表盘</a>
+      <a href="#admin/dashboard" class="nav-link" data-view="admin/dashboard">经营状况总览</a>
+      <a href="#admin/logistics" class="nav-link" data-view="admin/logistics">物流状况总览</a>
       <div class="section">快速录入</div>
       <a href="#staff/workload" class="nav-link" data-view="staff/workload">每日工作量</a>
       <a href="#staff/shipment" class="nav-link" data-view="staff/shipment">发货数据</a>
@@ -176,7 +178,9 @@ tr:hover td { background:#f8fafc; }
       <a href="#admin/arrival" class="nav-link" data-view="admin/arrival">国际物流到货</a>
       <div class="section">财务</div>
       <a href="#admin/finance" class="nav-link" data-view="admin/finance">财务报表</a>
+      <a href="#staff/expense" class="nav-link" data-view="staff/expense">临时费用登记</a>
       <a href="#admin/fixedcost" class="nav-link" data-view="admin/fixedcost">固定成本</a>
+      <a href="#admin/expense" class="nav-link" data-view="admin/expense">临时费用记录</a>
       <a href="#admin/salary" class="nav-link" data-view="admin/salary">人员工资</a>
       <div class="section">系统</div>
       <a href="#admin/users" class="nav-link" data-view="admin/users">账号管理</a>
@@ -208,11 +212,14 @@ const DEFAULT_DATA = {
     { id: 1, username: 'FX1999', password: 'FX1999', name: '管理员', role: 'admin' }
   ],
   workload: [], shipments: [], problems: [], losses: [], arrivals: [],
-  fixedcosts: [], salaries: [], seq: 1000,
+  fixedcosts: [], salaries: [], expenses: [], seq: 1000,
   costCategories: ['房租','水电','物业','设备折旧','耗材','软件/系统','物流运费','办公费用','其他'],
   problemTypes: ['货不对版','质量问题','数量不对','商品破损','其他'],
   responsibleTypes: ['采购','商家','物流','仓库','其他'],
   solutionTypes: ['退货退款','换货','仅退款','其他'],
+  countries: ['BD','LK','PK'],
+  productAttrs: ['普通货','带电','化妆品','插线','其他'],
+  tempExpenseCategories: ['国内运费','团建聚餐','接待费用','办公耗材','设备维修','交通费用','其他'],
 };
 
 function loadDB() {
@@ -224,6 +231,10 @@ function loadDB() {
       if (!data.problemTypes) data.problemTypes = DEFAULT_DATA.problemTypes;
       if (!data.responsibleTypes) data.responsibleTypes = DEFAULT_DATA.responsibleTypes;
       if (!data.solutionTypes) data.solutionTypes = DEFAULT_DATA.solutionTypes;
+      if (!data.countries) data.countries = DEFAULT_DATA.countries;
+      if (!data.productAttrs) data.productAttrs = DEFAULT_DATA.productAttrs;
+      if (!data.expenses) data.expenses = [];
+      if (!data.tempExpenseCategories) data.tempExpenseCategories = DEFAULT_DATA.tempExpenseCategories;
       return data;
     }
   } catch(e) {}
@@ -355,6 +366,7 @@ function renderStaffTo(view, targetEl) {
     'staff/problem': staffProblem,
     'staff/loss': staffLoss,
     'staff/arrival': staffArrival,
+    'staff/expense': staffExpense,
     'staff/stats': staffStats,
     'staff/records': staffRecords,
   };
@@ -537,17 +549,17 @@ let shipmentBoxes = [];
 
 function staffShipment() {
   document.getElementById('staff-title').textContent = '发货数据录入';
-  shipmentBoxes = [{ barcode:'', items:'', weight:'', length:'', width:'', height:'' }];
+  shipmentBoxes = [{ barcode:'', items:'', weight:'', length:'', width:'', height:'', attr:'普通货', rate:'' }];
 
   const todayStr = today();
+  const countries = db.countries || ['BD','LK','PK'];
+  let countryBtns = countries.map(c => `<button type="button" class="opt-btn" data-value="${c}" onclick="pickShipCountry(this)">${c}</button>`).join('');
   let html = `<div class="card">
     <h3>新发货批次</h3>
     <div class="form-group" style="margin-bottom:14px">
       <label>目的国家 *</label>
       <div class="btn-group" id="countryBtns">
-        <button type="button" class="opt-btn" data-value="BD" onclick="pickShipCountry(this)">BD 孟加拉</button>
-        <button type="button" class="opt-btn" data-value="LK" onclick="pickShipCountry(this)">LK 斯里兰卡</button>
-        <button type="button" class="opt-btn" data-value="PK" onclick="pickShipCountry(this)">PK 巴基斯坦</button>
+        ${countryBtns}
       </div>
       <input type="hidden" id="shipCountry" value="">
     </div>
@@ -563,7 +575,7 @@ function staffShipment() {
 
   <div class="card">
     <h3>纸箱明细</h3>
-    <p style="color:var(--text-light);font-size:13px;margin-bottom:12px">扫码枪扫入纸箱条形码，扫完自动新增下一行。</p>
+    <p style="color:var(--text-light);font-size:13px;margin-bottom:12px">扫码枪扫入纸箱条形码，扫完自动新增下一行。每个箱子单独设置商品属性和运输单价。</p>
     <div id="boxList"></div>
     <button class="btn-secondary btn-sm" onclick="addBoxRow()">+ 添加纸箱</button>
   </div>
@@ -575,16 +587,16 @@ function staffShipment() {
       <input type="text" id="shipLogistics" placeholder="如：DHL / 顺丰 / 专线">
     </div>
     <div class="form-group" style="margin-bottom:14px">
-      <label>国际空运运费单价（元/kg）</label>
-      <input type="number" id="shipRate" step="0.01" oninput="calcShipFreight()" placeholder="如：45">
-    </div>
-    <div class="form-group" style="margin-bottom:14px">
       <label>总重量</label>
       <input type="text" id="shipTotalWeight" readonly value="0 kg" style="background:#f1f5f9">
     </div>
     <div class="form-group" style="margin-bottom:14px">
-      <label>国际运费（自动计算）</label>
+      <label>国际运费（自动计算 = 各箱单价×重量之和）</label>
       <input type="text" id="shipFreight" readonly value="¥0.00" style="background:#f1f5f9;font-weight:700;color:var(--primary)">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>按商品属性汇总</label>
+      <div id="attrSummary"></div>
     </div>
     <div class="form-group" style="margin-bottom:14px">
       <label>备注</label>
@@ -618,18 +630,28 @@ function autoBatchNo(country) {
 
 function renderBoxRows() {
   const list = document.getElementById('boxList');
-  let html = '<table><thead><tr><th>序号</th><th>纸箱条形码</th><th>商品件数</th><th>重量(kg)</th><th>长×宽×高(cm)</th><th>操作</th></tr></thead><tbody id="boxTbody">';
+  const attrOptions = db.productAttrs || ['普通货','带电','化妆品','插线','其他'];
+  let html = '<table><thead><tr><th>序号</th><th>纸箱条形码</th><th>商品属性</th><th>件数</th><th>重量(kg)</th><th>运输单价</th><th>运费小计</th><th>长×宽×高(cm)</th><th>体积(CBM)</th><th>操作</th></tr></thead><tbody id="boxTbody">';
   shipmentBoxes.forEach((b, i) => {
+    const attrOpts = attrOptions.map(a => `<option value="${a}" ${b.attr===a?'selected':''}>${a}</option>`).join('');
+    const vol = (b.length && b.width && b.height) ? (b.length*b.width*b.height/1000000).toFixed(4) : '-';
     html += `<tr>
       <td>${i+1}</td>
-      <td><input type="text" class="box-barcode" value="${b.barcode}" oninput="shipmentBoxes[${i}].barcode=this.value" style="width:160px" placeholder="扫码或输入"></td>
-      <td><input type="number" value="${b.items}" oninput="shipmentBoxes[${i}].items=this.value;calcShipFreight()" style="width:90px"></td>
-      <td><input type="number" step="0.01" value="${b.weight}" oninput="shipmentBoxes[${i}].weight=this.value;calcShipFreight()" style="width:90px"></td>
-      <td style="white-space:nowrap">
-        <input type="number" value="${b.length}" oninput="shipmentBoxes[${i}].length=this.value" style="width:60px" placeholder="长">×
-        <input type="number" value="${b.width}" oninput="shipmentBoxes[${i}].width=this.value" style="width:60px" placeholder="宽">×
-        <input type="number" value="${b.height}" oninput="shipmentBoxes[${i}].height=this.value" style="width:60px" placeholder="高">
+      <td><input type="text" class="box-barcode" value="${b.barcode}" oninput="shipmentBoxes[${i}].barcode=this.value" style="width:140px" placeholder="扫码或输入"></td>
+      <td>
+        <select onchange="this.nextElementSibling.style.display=(this.value==='其他')?'inline-block':'none';shipmentBoxes[${i}].attr=this.value;shipmentBoxes[${i}].attrCustom=(this.value==='其他')?this.nextElementSibling.value:'';renderBoxRows();calcShipFreight()" style="width:90px">${attrOpts}</select>
+        <input type="text" placeholder="填写其他" oninput="shipmentBoxes[${i}].attrCustom=this.value;calcShipFreight()" style="width:80px;display:${b.attr==='其他'?'inline-block':'none'};margin-left:4px">
       </td>
+      <td><input type="number" value="${b.items}" oninput="shipmentBoxes[${i}].items=this.value;calcShipFreight()" style="width:70px"></td>
+      <td><input type="number" step="0.01" value="${b.weight}" oninput="shipmentBoxes[${i}].weight=this.value;updateBoxCalc(${i});calcShipFreight()" style="width:80px"></td>
+      <td><input type="number" step="0.01" value="${b.rate}" oninput="shipmentBoxes[${i}].rate=this.value;updateBoxCalc(${i});calcShipFreight()" style="width:80px" placeholder="如45"></td>
+      <td id="freight-${i}" style="font-weight:600;color:var(--primary)">${((+b.weight||0)*(+b.rate||0)).toFixed(2)}</td>
+      <td style="white-space:nowrap">
+        <input type="number" value="${b.length}" oninput="shipmentBoxes[${i}].length=this.value;updateBoxCalc(${i});calcShipFreight()" style="width:50px" placeholder="长">×
+        <input type="number" value="${b.width}" oninput="shipmentBoxes[${i}].width=this.value;updateBoxCalc(${i});calcShipFreight()" style="width:50px" placeholder="宽">×
+        <input type="number" value="${b.height}" oninput="shipmentBoxes[${i}].height=this.value;updateBoxCalc(${i});calcShipFreight()" style="width:50px" placeholder="高">
+      </td>
+      <td id="vol-${i}" style="font-weight:600">${vol}</td>
       <td><button class="btn-danger btn-sm" onclick="removeBoxRow(${i})">删</button></td>
     </tr>`;
   });
@@ -654,10 +676,30 @@ function renderBoxRows() {
       }
     });
   });
+  calcShipFreight();
+}
+
+function updateVol(i) {
+  const b = shipmentBoxes[i];
+  const el = document.getElementById('vol-' + i);
+  if (!el) return;
+  const vol = (b.length && b.width && b.height) ? (b.length*b.width*b.height/1000000).toFixed(4) : '-';
+  el.textContent = vol;
+}
+
+function updateBoxCalc(i) {
+  const b = shipmentBoxes[i];
+  const volEl = document.getElementById('vol-' + i);
+  if (volEl) {
+    const vol = (b.length && b.width && b.height) ? (b.length*b.width*b.height/1000000).toFixed(4) : '-';
+    volEl.textContent = vol;
+  }
+  const fEl = document.getElementById('freight-' + i);
+  if (fEl) fEl.textContent = ((+b.weight||0)*(+b.rate||0)).toFixed(2);
 }
 
 function addBoxRow() {
-  shipmentBoxes.push({ barcode:'', items:'', weight:'', length:'', width:'', height:'' });
+  shipmentBoxes.push({ barcode:'', items:'', weight:'', length:'', width:'', height:'', attr:'普通货', rate:'' });
   renderBoxRows();
 }
 
@@ -669,9 +711,31 @@ function removeBoxRow(i) {
 
 function calcShipFreight() {
   const totalWeight = shipmentBoxes.reduce((s,b) => s + (+b.weight||0), 0);
-  const rate = +document.getElementById('shipRate').value || 0;
+  const totalVol = shipmentBoxes.reduce((s,b) => {
+    return s + ((b.length && b.width && b.height) ? (+b.length*+b.width*+b.height/1000000) : 0);
+  }, 0);
+  const freight = shipmentBoxes.reduce((s,b) => s + (+b.weight||0) * (+b.rate||0), 0);
   document.getElementById('shipTotalWeight').value = totalWeight.toFixed(2) + ' kg';
-  document.getElementById('shipFreight').value = '¥' + (totalWeight * rate).toFixed(2);
+  document.getElementById('shipFreight').value = '¥' + freight.toFixed(2);
+
+  // 按商品属性分类汇总
+  const attrMap = {};
+  shipmentBoxes.forEach(b => {
+    const attr = b.attr === '其他' ? ('其他:' + (b.attrCustom||'')) : (b.attr || '普通货');
+    if (!attrMap[attr]) attrMap[attr] = {weight:0, vol:0, freight:0, items:0};
+    attrMap[attr].weight += +b.weight||0;
+    attrMap[attr].vol += (b.length && b.width && b.height) ? (+b.length*+b.width*+b.height/1000000) : 0;
+    attrMap[attr].freight += (+b.weight||0) * (+b.rate||0);
+    attrMap[attr].items += +b.items||0;
+  });
+  let html = '<table><thead><tr><th>商品属性</th><th>件数</th><th>重量(kg)</th><th>体积(CBM)</th><th>运费(元)</th></tr></thead><tbody>';
+  Object.entries(attrMap).forEach(([attr, d]) => {
+    html += `<tr><td>${attr}</td><td>${d.items}</td><td>${d.weight.toFixed(2)}</td><td>${d.vol.toFixed(4)}</td><td>¥${d.freight.toFixed(2)}</td></tr>`;
+  });
+  html += `<tr style="font-weight:700;background:#f8fafc"><td>合计</td><td>${shipmentBoxes.reduce((s,b)=>s+(+b.items||0),0)}</td><td>${totalWeight.toFixed(2)}</td><td>${totalVol.toFixed(4)}</td><td>¥${freight.toFixed(2)}</td></tr>`;
+  html += '</tbody></table>';
+  const summaryEl = document.getElementById('attrSummary');
+  if (summaryEl) summaryEl.innerHTML = html;
 }
 
 function submitShipment() {
@@ -679,7 +743,6 @@ function submitShipment() {
   const batchNo = document.getElementById('shipBatchNo').value;
   const date = document.getElementById('shipDate').value;
   const logistics = document.getElementById('shipLogistics').value.trim();
-  const rate = +document.getElementById('shipRate').value || 0;
   const remark = document.getElementById('shipRemark').value.trim();
 
   if (!country) { toast('请选择目的国家', true); return; }
@@ -689,7 +752,7 @@ function submitShipment() {
 
   const totalWeight = validBoxes.reduce((s,b) => s + (+b.weight||0), 0);
   const totalItems = validBoxes.reduce((s,b) => s + (+b.items||0), 0);
-  const freight = totalWeight * rate;
+  const freight = validBoxes.reduce((s,b) => s + (+b.weight||0) * (+b.rate||0), 0);
   const staff = currentUser.name;
 
   validBoxes.forEach((b, i) => {
@@ -698,11 +761,14 @@ function submitShipment() {
       id: nextId(),
       batchNo, country, date, staff,
       barcode: b.barcode,
+      attr: b.attr === '其他' ? ('其他:' + (b.attrCustom||'')) : (b.attr || '普通货'),
       items: +b.items||0,
       weight: +b.weight||0,
+      rate: +b.rate||0,
       length: +b.length||0, width: +b.width||0, height: +b.height||0,
       volume: vol,
-      logistics, rate, freight: i===0 ? freight : 0,
+      logistics,
+      freight: i===0 ? freight : 0,
       remark: i===0 ? remark : '',
       boxCount: validBoxes.length,
       totalWeight, totalItems,
@@ -720,7 +786,8 @@ function staffProblem() {
   renderForm('问题件登记', [
     {label:'登记日期', name:'date', type:'date', val: today()},
     {label:'店铺/供应商', name:'shopName', type:'text', required:true, full:true},
-    {label:'订单号', name:'orderNo', type:'text', required:true},
+    {label:'1688平台单号', name:'orderNo1688', type:'text'},
+    {label:'富荣系统单号', name:'orderNoFR', type:'text'},
     {label:'CM条码', name:'cmCode', type:'text'},
     {label:'商品名称', name:'productName', type:'text'},
     {label:'商品链接', name:'productUrl', type:'text', full:true},
@@ -738,6 +805,25 @@ function staffProblem() {
     saveDB();
     toast('问题件已登记');
     afterSubmit('admin/problem');
+  });
+}
+
+// ===== 员工端：临时费用登记 =====
+function staffExpense() {
+  renderForm('临时费用登记', [
+    {label:'费用日期', name:'date', type:'date', val: today()},
+    {label:'费用类别', name:'category', type:'select', options: db.tempExpenseCategories || ['国内运费','团建聚餐','接待费用','办公耗材','设备维修','交通费用','其他'], required:true},
+    {label:'费用说明', name:'description', type:'text', required:true, full:true},
+    {label:'金额(元)', name:'amount', type:'number', required:true},
+    {label:'支付方式', name:'payMethod', type:'select', options:['现金','微信','支付宝','对公转账','其他']},
+    {label:'备注', name:'remark', type:'textarea', full:true},
+  ], (obj) => {
+    obj.staff = currentUser.name;
+    obj.month = (obj.date||'').slice(0,7);
+    db.expenses.push({id: nextId(), ...obj});
+    saveDB();
+    toast('临时费用已登记');
+    afterSubmit('admin/expense');
   });
 }
 
@@ -1056,6 +1142,7 @@ function renderStaff(view) {
     'staff/problem': staffProblem,
     'staff/loss': staffLoss,
     'staff/arrival': staffArrival,
+    'staff/expense': staffExpense,
     'staff/stats': staffStats,
     'staff/records': staffRecords,
   };
@@ -1067,11 +1154,12 @@ function renderStaff(view) {
 // ============================================================
 const TABLE_CONFIGS = {
   'admin/workload': { title:'每日工作量', store:'workload', cols:['date','staff','country','inQty','outQty','packQty','startTime','endTime'], colLabels:{date:'日期',staff:'姓名',country:'国家',inQty:'入库',outQty:'出库',packQty:'打包',startTime:'上班',endTime:'下班'} },
-  'admin/shipment': { title:'发货数据', store:'shipments', cols:['batchNo','date','country','barcode','items','weight','volume','logistics','rate','freight','staff'], colLabels:{batchNo:'批次号',date:'日期',country:'目的国',barcode:'纸箱条码',items:'件数',weight:'重量kg',volume:'体积m³',logistics:'物流公司',rate:'单价/kg',freight:'运费',staff:'录入人'} },
-  'admin/problem': { title:'问题件', store:'problems', cols:['date','shopName','orderNo','cmCode','productName','type','responsible','cost','costType','status'], colLabels:{date:'日期',shopName:'店铺/供应商',orderNo:'订单号',cmCode:'CM条码',productName:'商品',type:'类型',responsible:'责任方',cost:'费用',costType:'费用类型',status:'状态'} },
+  'admin/shipment': { title:'发货数据', store:'shipments', cols:['batchNo','date','country','barcode','attr','items','weight','rate','volume','logistics','freight','staff'], colLabels:{batchNo:'批次号',date:'日期',country:'目的国',barcode:'纸箱条码',attr:'商品属性',items:'件数',weight:'重量kg',rate:'单价/kg',volume:'体积m³',logistics:'物流公司',freight:'运费',staff:'录入人'} },
+  'admin/problem': { title:'问题件', store:'problems', cols:['date','shopName','orderNo1688','orderNoFR','cmCode','productName','type','responsible','cost','costType','status'], colLabels:{date:'日期',shopName:'店铺/供应商',orderNo1688:'1688单号',orderNoFR:'富荣单号',cmCode:'CM条码',productName:'商品',type:'类型',responsible:'责任方',cost:'费用',costType:'费用类型',status:'状态'} },
   'admin/loss': { title:'仓库丢失', store:'losses', cols:['date','country','cmCode','productName','qty','unitPrice','lossAmount'], colLabels:{date:'日期',country:'国家',cmCode:'CM条码',productName:'商品',qty:'数量',unitPrice:'单价',lossAmount:'损失'} },
   'admin/arrival': { title:'国际物流到货', store:'arrivals', cols:['date','batchNo','barcode','origin','country','logistics','trackingNo','totalItems','actualItems','lostQty','lostValue','damagedQty','damagedValue','claimParty','freight','staff'], colLabels:{date:'到货日',batchNo:'批次号',barcode:'纸箱条码',origin:'始发国',country:'目的国',logistics:'物流',trackingNo:'运单号',totalItems:'总件数',actualItems:'到货件数',lostQty:'丢件数',lostValue:'丢件损失',damagedQty:'破损数',damagedValue:'破损损失',claimParty:'赔付方',freight:'运费',staff:'录入人'} },
   'admin/fixedcost': { title:'固定成本', store:'fixedcosts', cols:['month','category','item','amount','remark'], colLabels:{month:'月份',category:'类别',item:'项目',amount:'金额',remark:'备注'}, selectFields:{category:'costCategories'} },
+  'admin/expense': { title:'临时费用', store:'expenses', cols:['date','category','description','amount','payMethod','staff'], colLabels:{date:'日期',category:'类别',description:'说明',amount:'金额',payMethod:'支付方式',staff:'录入人'} },
   'admin/salary': { title:'人员工资', store:'salaries', cols:['month','name','baseSalary','bonus','allowance','deduction','netSalary'], colLabels:{month:'月份',name:'姓名',baseSalary:'基本工资',bonus:'绩效',allowance:'补贴',deduction:'扣款',netSalary:'实发工资'} },
 };
 
@@ -1375,7 +1463,11 @@ function adminFinance() {
   const salaries = (db.salaries||[]).filter(r => (r.month||'').startsWith(month));
   const salaryTotal = salaries.reduce((s,r) => s + (+r.netSalary||0), 0);
 
-  const expense = fixedTotal + salaryTotal;
+  // 临时费用
+  const tempExpenses = (db.expenses||[]).filter(r => (r.date||'').startsWith(month));
+  const tempTotal = tempExpenses.reduce((s,r) => s + (+r.amount||0), 0);
+
+  const expense = fixedTotal + salaryTotal + tempTotal;
   const profit = revenue - expense;
 
   let html = `<div class="card">
@@ -1479,9 +1571,10 @@ function adminFinance() {
     const rev = shipped * 5;
     const fc = (db.fixedcosts||[]).filter(r => (r.month||'').startsWith(m)).reduce((s,r)=>s+(+r.amount||0),0);
     const sal = (db.salaries||[]).filter(r => (r.month||'').startsWith(m)).reduce((s,r)=>s+(+r.netSalary||0),0);
+    const tmp = (db.expenses||[]).filter(r => (r.date||'').startsWith(m)).reduce((s,r)=>s+(+r.amount||0),0);
     trendRev.push(rev);
-    trendExp.push(fc+sal);
-    trendPro.push(rev-fc-sal);
+    trendExp.push(fc+sal+tmp);
+    trendPro.push(rev-fc-sal-tmp);
   });
   if (window.finChart) window.finChart.destroy();
   window.finChart = safeChart(document.getElementById('finTrendChart'), {
@@ -1508,12 +1601,14 @@ function adminFinance() {
     ['收入(件数×5)', months.map(m => (db.shipments||[]).filter(r => (r.date||'').startsWith(m)).reduce((s,r)=>s+(+r.items||0),0)*5)],
     ['固定成本', months.map(m => (db.fixedcosts||[]).filter(r => (r.month||'').startsWith(m)).reduce((s,r)=>s+(+r.amount||0),0))],
     ['人员工资', months.map(m => (db.salaries||[]).filter(r => (r.month||'').startsWith(m)).reduce((s,r)=>s+(+r.netSalary||0),0))],
+    ['临时费用', months.map(m => (db.expenses||[]).filter(r => (r.date||'').startsWith(m)).reduce((s,r)=>s+(+r.amount||0),0))],
   ];
   const fcByMonth = months.map(m => (db.fixedcosts||[]).filter(r => (r.month||'').startsWith(m)).reduce((s,r)=>s+(+r.amount||0),0));
   const salByMonth = months.map(m => (db.salaries||[]).filter(r => (r.month||'').startsWith(m)).reduce((s,r)=>s+(+r.netSalary||0),0));
+  const tmpByMonth = months.map(m => (db.expenses||[]).filter(r => (r.date||'').startsWith(m)).reduce((s,r)=>s+(+r.amount||0),0));
   const revByMonth = months.map(m => (db.shipments||[]).filter(r => (r.date||'').startsWith(m)).reduce((s,r)=>s+(+r.items||0),0)*5);
-  compareRows.push(['总支出', months.map((m,i) => fcByMonth[i]+salByMonth[i])]);
-  compareRows.push(['利润', months.map((m,i) => revByMonth[i]-fcByMonth[i]-salByMonth[i])]);
+  compareRows.push(['总支出', months.map((m,i) => fcByMonth[i]+salByMonth[i]+tmpByMonth[i])]);
+  compareRows.push(['利润', months.map((m,i) => revByMonth[i]-fcByMonth[i]-salByMonth[i]-tmpByMonth[i])]);
 
   let body = '';
   compareRows.forEach(([label, vals]) => {
@@ -1528,7 +1623,7 @@ function adminFinance() {
   document.getElementById('monthCompareBody').innerHTML = body;
 }
 function adminDashboard() {
-  document.getElementById('admin-title').textContent = '统计仪表盘';
+  document.getElementById('admin-title').textContent = '经营状况总览';
   const nowMonth = today().slice(0,7);
   const month = window.dashMonth || nowMonth;
 
@@ -1730,8 +1825,155 @@ function adminDashboard() {
 }
 
 // ============================================================
-// 管理后台：账号管理
+// 管理后台：物流统计
 // ============================================================
+function adminLogistics() {
+  document.getElementById('admin-title').textContent = '物流状况总览';
+  const nowMonth = today().slice(0,7);
+  const month = window.dashMonth || nowMonth;
+  let html = `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h3 style="margin:0">${month} 物流统计</h3>
+      <input type="month" value="${month}" onchange="window.dashMonth=this.value;adminLogistics()" style="width:160px">
+    </div>
+  </div>`;
+
+  const shipRows = db.shipments.filter(r => (r.date||'').slice(0,7) === month);
+  const freightByBatch = {};
+  shipRows.forEach(r => { if (r.freight) freightByBatch[r.batchNo] = +r.freight||0; });
+
+  // 1. 按商品属性汇总
+  const attrMap2 = {};
+  shipRows.forEach(r => {
+    const a = r.attr || '普通货';
+    if (!attrMap2[a]) attrMap2[a] = {boxes:0, items:0, weight:0, vol:0, freight:0};
+    attrMap2[a].boxes++;
+    attrMap2[a].items += +r.items||0;
+    attrMap2[a].weight += +r.weight||0;
+    attrMap2[a].vol += +r.volume||0;
+  });
+  const totalW = shipRows.reduce((s,r)=>s+(+r.weight||0),0);
+  shipRows.forEach(r => {
+    const a = r.attr || '普通货';
+    const f = freightByBatch[r.batchNo] || 0;
+    const w = +r.weight||0;
+    attrMap2[a].freight += f * (totalW > 0 ? w/totalW : 0);
+  });
+
+  html += '<div class="card"><h3>按商品属性</h3><div class="table-wrap"><table><thead><tr><th>属性</th><th>箱数</th><th>件数</th><th>重量(kg)</th><th>体积(CBM)</th><th>运费(元)</th><th>平均每件运费</th></tr></thead><tbody>';
+  let tBoxes=0,tItems=0,tW=0,tV=0,tF=0;
+  Object.entries(attrMap2).forEach(([a,d]) => {
+    tBoxes+=d.boxes; tItems+=d.items; tW+=d.weight; tV+=d.vol; tF+=d.freight;
+    const perItem = d.items>0 ? (d.freight/d.items).toFixed(2) : '-';
+    html += `<tr><td>${a}</td><td>${d.boxes}</td><td>${d.items}</td><td>${d.weight.toFixed(2)}</td><td>${d.vol.toFixed(4)}</td><td>¥${d.freight.toFixed(2)}</td><td>¥${perItem}</td></tr>`;
+  });
+  const tPerItem = tItems>0 ? (tF/tItems).toFixed(2) : '-';
+  const tPerKg = tW>0 ? (tF/tW).toFixed(2) : '-';
+  html += `<tr style="font-weight:700;background:#f8fafc"><td>合计</td><td>${tBoxes}</td><td>${tItems}</td><td>${tW.toFixed(2)}</td><td>${tV.toFixed(4)}</td><td>¥${tF.toFixed(2)}</td><td>¥${tPerItem}</td></tr>`;
+  html += `</tbody></table></div><p style="margin:8px 0;color:var(--text-light)">平均每kg运费：¥${tPerKg}</p></div>`;
+
+  // 2. 按物流公司
+  const logMap = {};
+  shipRows.forEach(r => {
+    const l = r.logistics || '未知';
+    if (!logMap[l]) logMap[l] = {boxes:0, items:0, weight:0, vol:0, freight:0};
+    logMap[l].boxes++;
+    logMap[l].items += +r.items||0;
+    logMap[l].weight += +r.weight||0;
+    logMap[l].vol += +r.volume||0;
+  });
+  Object.keys(freightByBatch).forEach(bn => {
+    const batchRows = shipRows.filter(r => r.batchNo === bn);
+    const log = batchRows[0] ? batchRows[0].logistics : '未知';
+    if (logMap[log]) logMap[log].freight += freightByBatch[bn];
+  });
+  html += '<div class="card"><h3>按物流公司</h3><div class="table-wrap"><table><thead><tr><th>物流公司</th><th>箱数</th><th>件数</th><th>重量(kg)</th><th>体积(CBM)</th><th>运费(元)</th><th>平均每件</th><th>平均每kg</th></tr></thead><tbody>';
+  Object.entries(logMap).sort((a,b)=>b[1].freight-a[1].freight).forEach(([l,d]) => {
+    const pi = d.items>0 ? (d.freight/d.items).toFixed(2) : '-';
+    const pk = d.weight>0 ? (d.freight/d.weight).toFixed(2) : '-';
+    html += `<tr><td>${l}</td><td>${d.boxes}</td><td>${d.items}</td><td>${d.weight.toFixed(2)}</td><td>${d.vol.toFixed(4)}</td><td>¥${d.freight.toFixed(2)}</td><td>¥${pi}</td><td>¥${pk}</td></tr>`;
+  });
+  html += '</tbody></table></div></div>';
+
+  // 3. 月度物流成本趋势
+  const months6 = [];
+  const nowD = new Date();
+  for (let i=5;i>=0;i--) {
+    const d = new Date(nowD.getFullYear(), nowD.getMonth()-i, 1);
+    months6.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+  }
+  const monthFreight = months6.map(m => {
+    const rows = db.shipments.filter(r => (r.date||'').startsWith(m));
+    const fMap = {};
+    rows.forEach(r => { if (r.freight) fMap[r.batchNo] = +r.freight||0; });
+    return Object.values(fMap).reduce((s,v)=>s+v,0);
+  });
+  html += '<div class="card"><h3>月度物流成本趋势</h3><canvas id="shipTrendChart" height="80"></canvas></div>';
+
+  // 4. 按物流公司统计破损丢失
+  const lossByLog = {};
+  (db.arrivals||[]).forEach(r => {
+    const l = r.logistics || '未知';
+    if (!lossByLog[l]) lossByLog[l] = {lostQty:0, lostVal:0, damQty:0, damVal:0};
+    lossByLog[l].lostQty += +r.lostQty||0;
+    lossByLog[l].lostVal += +r.lostValue||0;
+    lossByLog[l].damQty += +r.damagedQty||0;
+    lossByLog[l].damVal += +r.damagedValue||0;
+  });
+  html += '<div class="card"><h3>各物流公司破损/丢失统计（降序）</h3><div class="table-wrap"><table><thead><tr><th>物流公司</th><th>丢件数</th><th>丢件金额</th><th>破损数</th><th>破损金额</th><th>合计损失</th></tr></thead><tbody>';
+  Object.entries(lossByLog).map(([l,d]) => [l,d,d.lostVal+d.damVal]).sort((a,b)=>b[2]-a[2]).forEach(([l,d,tot]) => {
+    html += `<tr><td>${l}</td><td>${d.lostQty}</td><td>¥${d.lostVal.toFixed(2)}</td><td>${d.damQty}</td><td>¥${d.damVal.toFixed(2)}</td><td style="font-weight:700">¥${tot.toFixed(2)}</td></tr>`;
+  });
+  if (Object.keys(lossByLog).length === 0) html += '<tr><td colspan="6" style="color:var(--text-light)">暂无数据</td></tr>';
+  html += '</tbody></table></div></div>';
+
+  // 5. 物流公司时效统计
+  const shipByBarcode = {};
+  (db.shipments||[]).forEach(s => { shipByBarcode[s.barcode] = s; });
+  const transitMap = {};
+  (db.arrivals||[]).forEach(a => {
+    const s = shipByBarcode[a.barcode];
+    if (!s || !a.date || !s.date) return;
+    const days = Math.round((new Date(a.date) - new Date(s.date)) / 86400000);
+    if (days < 0) return;
+    const log = a.logistics || '未知';
+    const attr = s.attr || '普通货';
+    if (!transitMap[log]) transitMap[log] = {totalDays:0, count:0, byAttr:{}};
+    transitMap[log].totalDays += days;
+    transitMap[log].count++;
+    if (!transitMap[log].byAttr[attr]) transitMap[log].byAttr[attr] = {totalDays:0, count:0};
+    transitMap[log].byAttr[attr].totalDays += days;
+    transitMap[log].byAttr[attr].count++;
+  });
+  html += '<div class="card"><h3>物流公司平均时效</h3><div class="table-wrap"><table><thead><tr><th>物流公司</th><th>总平均(天)</th><th>参考箱数</th></tr></thead><tbody>';
+  Object.entries(transitMap).sort((a,b)=>a[1].totalDays/a[1].count - b[1].totalDays/b[1].count).forEach(([l,d]) => {
+    const avg = (d.totalDays/d.count).toFixed(1);
+    html += `<tr><td>${l}</td><td style="font-weight:700">${avg} 天</td><td>${d.count}</td></tr>`;
+  });
+  if (Object.keys(transitMap).length === 0) html += '<tr><td colspan="3" style="color:var(--text-light)">暂无到货数据</td></tr>';
+  html += '</tbody></table></div></div>';
+
+  html += '<div class="card"><h3>各物流公司不同商品属性时效</h3><div class="table-wrap"><table><thead><tr><th>物流公司</th><th>商品属性</th><th>平均时效(天)</th><th>参考箱数</th></tr></thead><tbody>';
+  Object.entries(transitMap).forEach(([l,d]) => {
+    Object.entries(d.byAttr).forEach(([a,ad]) => {
+      html += `<tr><td>${l}</td><td>${a}</td><td style="font-weight:600">${(ad.totalDays/ad.count).toFixed(1)} 天</td><td>${ad.count}</td></tr>`;
+    });
+  });
+  if (Object.keys(transitMap).length === 0) html += '<tr><td colspan="4" style="color:var(--text-light)">暂无数据</td></tr>';
+  html += '</tbody></table></div></div>';
+
+  document.getElementById('admin-content').innerHTML = html;
+
+  setTimeout(() => {
+    if (window.shipTrendChart) window.shipTrendChart.destroy();
+    window.shipTrendChart = safeChart(document.getElementById('shipTrendChart'), {
+      type: 'bar',
+      data: { labels: months6, datasets: [{ label:'物流运费(元)', data: monthFreight, backgroundColor:'#8b5cf6' }] },
+      options: { responsive:true, scales:{y:{beginAtZero:true}} }
+    });
+  }, 100);
+}
+
 function adminUsers() {
   document.getElementById('admin-title').textContent = '账号管理';
   let html = `<div class="card">
@@ -1819,6 +2061,9 @@ function adminOptions() {
   document.getElementById('admin-title').textContent = '表单选项配置';
   let html = '';
   const groups = [
+    {title:'目的国家', desc:'用于发货、丢失等录入的国家选项', dbKey:'countries', inputId:'newCountry', listId:'countryList'},
+    {title:'商品属性', desc:'用于发货纸箱的商品属性（普通货/带电/化妆品等）', dbKey:'productAttrs', inputId:'newAttr', listId:'attrList'},
+    {title:'临时费用类别', desc:'用于临时费用登记', dbKey:'tempExpenseCategories', inputId:'newTempCat', listId:'tempCatList'},
     {title:'固定成本类别', desc:'用于固定成本录入', dbKey:'costCategories', inputId:'newCostCat', listId:'costCatList'},
     {title:'问题件类型', desc:'用于问题件登记', dbKey:'problemTypes', inputId:'newProbType', listId:'probTypeList'},
     {title:'处理方案', desc:'用于问题件登记', dbKey:'solutionTypes', inputId:'newSolType', listId:'solTypeList'},
@@ -1840,6 +2085,9 @@ function adminOptions() {
 }
 
 function renderAllOptionLists() {
+  renderOptionList('countries','countryList');
+  renderOptionList('productAttrs','attrList');
+  renderOptionList('tempExpenseCategories','tempCatList');
   renderOptionList('costCategories','costCatList');
   renderOptionList('problemTypes','probTypeList');
   renderOptionList('solutionTypes','solTypeList');
@@ -1976,6 +2224,7 @@ function exportCSV(store, name) {
 function renderAdmin(view) {
   const map = {
     'admin/dashboard': adminDashboard,
+    'admin/logistics': adminLogistics,
     'admin/finance': adminFinance,
     'admin/users': adminUsers,
     'admin/options': adminOptions,
