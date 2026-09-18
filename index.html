@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Eric仓库管理系统</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
   --primary: #2563eb; --primary-dark: #1d4ed8; --bg: #f1f5f9; --card: #ffffff;
@@ -204,48 +205,80 @@ tr:hover td { background:#f8fafc; }
 
 <script>
 // ============================================================
-// 数据层：localStorage 存储
+// 数据层：Supabase 云数据库
 // ============================================================
-const DB_KEY = 'eric_warehouse_db_v1';
-const DEFAULT_DATA = {
-  users: [
-    { id: 1, username: 'FX1999', password: 'FX1999', name: '管理员', role: 'admin' }
-  ],
-  workload: [], shipments: [], problems: [], losses: [], arrivals: [],
+const SUPABASE_URL = 'https://qvwzyhngpqjmuryljdtw.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_Ox7fOMiHrhMzlw1QFyHyFQ_eS60XW3j';
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const TABLES = ['users','workload','shipments','problems','losses','arrivals','fixedcosts','salaries','expenses'];
+
+let db = {
+  users: [], workload: [], shipments: [], problems: [], losses: [], arrivals: [],
   fixedcosts: [], salaries: [], expenses: [], seq: 1000,
+  countries: ['BD','LK','PK'], productAttrs: ['普通货','带电','化妆品','插线','其他'],
   costCategories: ['房租','水电','物业','设备折旧','耗材','软件/系统','物流运费','办公费用','其他'],
   problemTypes: ['货不对版','质量问题','数量不对','商品破损','其他'],
   responsibleTypes: ['采购','商家','物流','仓库','其他'],
   solutionTypes: ['退货退款','换货','仅退款','其他'],
-  countries: ['BD','LK','PK'],
-  productAttrs: ['普通货','带电','化妆品','插线','其他'],
   tempExpenseCategories: ['国内运费','团建聚餐','接待费用','办公耗材','设备维修','交通费用','其他'],
 };
 
-function loadDB() {
+async function loadDB() {
+  // 加载所有业务表
+  for (const t of TABLES) {
+    try {
+      const { data, error } = await supabase.from(t).select('*');
+      if (error) { console.warn('loadDB warn:', t, error.message); continue; }
+      db[t] = data || [];
+    } catch(e) { console.warn('loadDB error:', t, e); }
+  }
+  // 加载配置
   try {
-    const raw = localStorage.getItem(DB_KEY);
-    if (raw) {
-      const data = JSON.parse(raw);
-      if (!data.costCategories) data.costCategories = DEFAULT_DATA.costCategories;
-      if (!data.problemTypes) data.problemTypes = DEFAULT_DATA.problemTypes;
-      if (!data.responsibleTypes) data.responsibleTypes = DEFAULT_DATA.responsibleTypes;
-      if (!data.solutionTypes) data.solutionTypes = DEFAULT_DATA.solutionTypes;
-      if (!data.countries) data.countries = DEFAULT_DATA.countries;
-      if (!data.productAttrs) data.productAttrs = DEFAULT_DATA.productAttrs;
-      if (!data.expenses) data.expenses = [];
-      if (!data.tempExpenseCategories) data.tempExpenseCategories = DEFAULT_DATA.tempExpenseCategories;
-      return data;
+    const { data: opts, error } = await supabase.from('app_options').select('*');
+    if (!error && opts) {
+      opts.forEach(o => { db[o.key] = o.value; });
     }
-  } catch(e) {}
-  const init = JSON.parse(JSON.stringify(DEFAULT_DATA));
-  localStorage.setItem(DB_KEY, JSON.stringify(init));
-  return init;
+  } catch(e) { console.warn('loadDB opts error:', e); }
+  // 计算max id
+  let maxId = 0;
+  TABLES.forEach(t => { (db[t]||[]).forEach(r => { if (r.id > maxId) maxId = r.id; }); });
+  db.seq = maxId + 1;
 }
-function saveDB() { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
-let db = loadDB();
 
-function nextId() { db.seq++; return db.seq; }
+async function saveRow(store, obj) {
+  // 插入新行到Supabase，返回带id的对象
+  const { data, error } = await supabase.from(store).insert(obj).select().single();
+  if (error) { console.error('saveRow error:', error); toast('保存失败: '+error.message, true); return null; }
+  obj.id = data.id;
+  if (!db[store]) db[store] = [];
+  db[store].push(obj);
+  return obj;
+}
+
+async function updateRow(store, id, obj) {
+  const { error } = await supabase.from(store).update(obj).eq('id', id);
+  if (error) { console.error('updateRow error:', error); toast('更新失败: '+error.message, true); return false; }
+  const idx = (db[store]||[]).findIndex(r => r.id === id);
+  if (idx >= 0) db[store][idx] = { ...db[store][idx], ...obj, id };
+  return true;
+}
+
+async function deleteRow(store, id) {
+  const { error } = await supabase.from(store).delete().eq('id', id);
+  if (error) { console.error('deleteRow error:', error); toast('删除失败: '+error.message, true); return false; }
+  db[store] = (db[store]||[]).filter(r => r.id !== id);
+  return true;
+}
+
+async function saveOption(key, value) {
+  const { error } = await supabase.from('app_options').upsert({ key, value });
+  if (error) console.error('saveOption error:', error);
+  db[key] = value;
+}
+
+function nextId() { return db.seq++; }
+function saveDB() { /* Supabase模式下直接写库，此函数仅兼容旧代码 */ }
 function today() { return new Date().toISOString().slice(0,10); }
 function nowTime() { return new Date().toTimeString().slice(0,5); }
 function monthOf(dateStr) { return (dateStr||'').slice(0,7); }
@@ -256,14 +289,8 @@ function toast(msg, isErr) {
   t.style.display = 'block';
   setTimeout(()=>{ t.style.display='none'; }, 2500);
 }
-// Chart安全包装：CDN加载失败时不崩溃
-function safeChart(ctx, config) {
-  if (typeof Chart === 'undefined') {
-    if (ctx && ctx.parentNode) ctx.parentNode.innerHTML = '<p style="color:#94a3b8;padding:20px;text-align:center">图表组件加载中...</p>';
-    return null;
-  }
-  try { return new Chart(ctx, config); } catch(e) { console.warn('Chart error:', e); return null; }
-}
+
+
 function fmtMoney(n) { return '¥' + Number(n||0).toLocaleString('zh-CN',{minimumFractionDigits:2, maximumFractionDigits:2}); }
 
 // ============================================================
@@ -272,7 +299,7 @@ function fmtMoney(n) { return '¥' + Number(n||0).toLocaleString('zh-CN',{minimu
 let currentUser = null;
 const SESSION_KEY = 'eric_warehouse_session';
 
-function doLogin() {
+async function doLogin() {
   const u = document.getElementById('login-user').value.trim();
   const p = document.getElementById('login-pass').value;
   const found = db.users.find(x => x.username === u && x.password === p);
@@ -426,7 +453,7 @@ function renderForm(title, fields, onSubmit) {
   });
   html += `</div><div class="form-actions"><button type="submit" class="btn-primary">提交</button><button type="reset" class="btn-secondary">重置</button></div></form></div>`;
   content.innerHTML = html;
-  document.getElementById('dataForm').onsubmit = function(e) {
+  document.getElementById('dataForm').onsubmit = async function(e) {
     e.preventDefault();
     const fd = new FormData(this);
     const obj = {};
@@ -501,7 +528,7 @@ function staffWorkload() {
   </div></form></div>`;
 
   document.getElementById('staff-content').innerHTML = html;
-  document.getElementById('dataForm').onsubmit = function(e) {
+  document.getElementById('dataForm').onsubmit = async function(e) {
     e.preventDefault();
     const fd = new FormData(this);
     const date = fd.get('date');
@@ -515,20 +542,19 @@ function staffWorkload() {
       staff = currentUser.name;
     }
     let count = 0;
-    ['BD','PK','LK'].forEach(c => {
+    for (const c of ['BD','PK','LK']) {
       const inQty = +fd.get(c+'_in') || 0;
       const outQty = +fd.get(c+'_out') || 0;
       const packQty = +fd.get(c+'_pack') || 0;
-      if (inQty === 0 && outQty === 0 && packQty === 0) return;
-      db.workload.push({
-        id: nextId(), date, staff, country: c,
+      if (inQty === 0 && outQty === 0 && packQty === 0) continue;
+      await saveRow('workload', {
+        date, staff, country: c,
         inQty, outQty, packQty, startTime, endTime,
         createdBy: currentUser.name, createdAt: new Date().toISOString()
       });
       count++;
-    });
+    }
     if (count === 0) { toast('请至少填写一个国家的数据', true); return; }
-    saveDB();
     toast(`已提交 ${count} 个国家的工作量记录`);
     if (isAdmin) { location.hash = '#admin/workload'; } else { staffWorkload(); }
   };
@@ -738,7 +764,7 @@ function calcShipFreight() {
   if (summaryEl) summaryEl.innerHTML = html;
 }
 
-function submitShipment() {
+async function submitShipment() {
   const country = document.getElementById('shipCountry').value;
   const batchNo = document.getElementById('shipBatchNo').value;
   const date = document.getElementById('shipDate').value;
@@ -755,10 +781,10 @@ function submitShipment() {
   const freight = validBoxes.reduce((s,b) => s + (+b.weight||0) * (+b.rate||0), 0);
   const staff = currentUser.name;
 
-  validBoxes.forEach((b, i) => {
+  for (let i = 0; i < validBoxes.length; i++) {
+    const b = validBoxes[i];
     const vol = (b.length && b.width && b.height) ? (b.length*b.width*b.height/1000000).toFixed(4) : 0;
-    db.shipments.push({
-      id: nextId(),
+    await saveRow('shipments', {
       batchNo, country, date, staff,
       barcode: b.barcode,
       attr: b.attr === '其他' ? ('其他:' + (b.attrCustom||'')) : (b.attr || '普通货'),
@@ -774,9 +800,7 @@ function submitShipment() {
       totalWeight, totalItems,
       createdAt: new Date().toISOString()
     });
-  });
-
-  saveDB();
+  }
   toast(`批次 ${batchNo} 已提交：${validBoxes.length}个纸箱，${totalItems}件，${totalWeight.toFixed(2)}kg，运费¥${freight.toFixed(2)}`);
   if (currentUser.role === 'admin') { location.hash = '#admin/shipment'; } else { staffShipment(); }
 }
@@ -799,17 +823,16 @@ function staffProblem() {
     {label:'费用类型', name:'costType', type:'select', options:['商品费','运输费']},
     {label:'处理状态', name:'status', type:'select', options:['待处理','处理中','已处理','已关闭']},
     {label:'备注', name:'remark', type:'textarea', full:true},
-  ], (obj) => {
+  ], async (obj) => {
     obj.staff = currentUser.name;
-    db.problems.push({id: nextId(), ...obj});
-    saveDB();
+    await saveRow('problems', obj);
     toast('问题件已登记');
     afterSubmit('admin/problem');
   });
 }
 
 // ===== 员工端：临时费用登记 =====
-function staffExpense() {
+async function staffExpense() {
   renderForm('临时费用登记', [
     {label:'费用日期', name:'date', type:'date', val: today()},
     {label:'费用类别', name:'category', type:'select', options: db.tempExpenseCategories || ['国内运费','团建聚餐','接待费用','办公耗材','设备维修','交通费用','其他'], required:true},
@@ -817,18 +840,17 @@ function staffExpense() {
     {label:'金额(元)', name:'amount', type:'number', required:true},
     {label:'支付方式', name:'payMethod', type:'select', options:['现金','微信','支付宝','对公转账','其他']},
     {label:'备注', name:'remark', type:'textarea', full:true},
-  ], (obj) => {
+  ], async (obj) => {
     obj.staff = currentUser.name;
     obj.month = (obj.date||'').slice(0,7);
-    db.expenses.push({id: nextId(), ...obj});
-    saveDB();
+    await saveRow('expenses', obj);
     toast('临时费用已登记');
     afterSubmit('admin/expense');
   });
 }
 
 // ===== 员工端：仓库丢失 =====
-function staffLoss() {
+async function staffLoss() {
   renderForm('仓库丢失登记', [
     {label:'丢失日期', name:'date', type:'date', val: today()},
     {label:'目的国家', name:'country', type:'select', options:['BD','LK','PK'], required:true},
@@ -837,10 +859,9 @@ function staffLoss() {
     {label:'丢失数量', name:'qty', type:'number', required:true},
     {label:'单价(元)', name:'unitPrice', type:'number'},
     {label:'备注', name:'remark', type:'textarea', full:true},
-  ], (obj) => {
+  ], async (obj) => {
     obj.lossAmount = (Number(obj.qty||0) * Number(obj.unitPrice||0)).toFixed(2);
-    db.losses.push({id: nextId(), ...obj});
-    saveDB();
+    await saveRow('losses', obj);
     toast('丢失记录已登记');
     afterSubmit('admin/loss');
   });
@@ -981,7 +1002,7 @@ function calcArrivalStatus() {
   }
 }
 
-function submitArrival() {
+async function submitArrival() {
   if (!matchedShipment) { toast('请先扫描纸箱条码匹配发货记录', true); return; }
   const claimParty = document.getElementById('arrClaimParty').value;
   if (!claimParty) { toast('请选择赔付方', true); return; }
@@ -1006,8 +1027,7 @@ function submitArrival() {
     staff: currentUser.name,
   };
   obj.intactItems = obj.actualItems - obj.lostQty - obj.damagedQty;
-  db.arrivals.push({id: nextId(), ...obj});
-  saveDB();
+  await saveRow('arrivals', obj);
   toast('到货记录已提交');
   if (currentUser.role === 'admin') { location.hash = '#admin/arrival'; } else { staffArrival(); }
 }
@@ -1265,14 +1285,14 @@ function closeModal() {
   document.getElementById('modalOverlay').style.display = 'none';
 }
 
-function cycleStatus(id, store, span) {
+async function cycleStatus(id, store, span) {
   const r = db[store].find(x => x.id === id);
   if (!r) return;
   const opts = ['待处理','处理中','已处理','已关闭'];
   const cur = opts.indexOf(r.status);
   const next = opts[(cur + 1) % opts.length];
   r.status = next;
-  saveDB();
+  await updateRow('problems', r.id, {status: next});
   span.innerHTML = statusBadge(next);
   toast('状态已改为：' + next);
 }
@@ -1397,7 +1417,7 @@ function editRecord(id, store, title) {
   document.body.appendChild(wrapper);
 }
 
-function saveRecord(id, store, isNew) {
+async function saveRecord(id, store, isNew) {
   const overlay = document.querySelector('.modal-overlay');
   const inputs = overlay.querySelectorAll('input');
   const obj = {};
@@ -1406,21 +1426,18 @@ function saveRecord(id, store, isNew) {
     obj.id = nextId();
     obj.createdBy = currentUser.name;
     obj.createdAt = new Date().toISOString();
-    db[store].push(obj);
+    await saveRow(store, obj);
   } else {
-    const idx = db[store].findIndex(r => r.id === id);
-    if (idx >= 0) db[store][idx] = {...db[store][idx], ...obj};
+    await updateRow(store, id, obj);
   }
-  saveDB();
   document.querySelector('.modal-overlay').remove();
   toast('保存成功');
   route();
 }
 
-function delRecord(id, store) {
+async function delRecord(id, store) {
   if (!confirm('确认删除这条记录？')) return;
-  db[store] = db[store].filter(r => r.id !== id);
-  saveDB();
+  await deleteRow(store, id);
   toast('已删除');
   route();
 }
@@ -2011,14 +2028,13 @@ function addUser() {
   document.body.appendChild(wrapper);
 }
 
-function saveNewUser() {
+async function saveNewUser() {
   const username = document.getElementById('new-username').value.trim();
   const name = document.getElementById('new-name').value.trim();
   const password = document.getElementById('new-password').value.trim();
   if (!username || !password) { toast('账号和密码不能为空', true); return; }
   if (db.users.find(u => u.username === username)) { toast('账号已存在', true); return; }
-  db.users.push({ id: nextId(), username, password, name: name||username, role: 'staff' });
-  saveDB();
+  await saveRow('users', { username, password, name: name||username, role: 'staff' });
   toast('员工账号已创建');
   document.querySelector('.modal-overlay').remove();
   adminUsers();
@@ -2038,20 +2054,18 @@ function editUser(id) {
   document.body.appendChild(wrapper);
 }
 
-function savePwd(id) {
+async function savePwd(id) {
   const pwd = document.getElementById('edit-password').value.trim();
   if (!pwd) { toast('密码不能为空', true); return; }
   const u = db.users.find(x => x.id === id);
-  u.password = pwd;
-  saveDB();
+  await updateRow('users', id, {password: pwd});
   toast('密码已修改');
   document.querySelector('.modal-overlay').remove();
 }
 
-function delUser(id) {
+async function delUser(id) {
   if (!confirm('确认删除该员工账号？')) return;
-  db.users = db.users.filter(u => u.id !== id);
-  saveDB();
+  await deleteRow('users', id);
   toast('账号已删除');
   adminUsers();
 }
@@ -2119,33 +2133,33 @@ function editOption(dbKey, idx, listId) {
   input.select();
 }
 
-function saveOptionEdit(dbKey, idx, listId) {
+async function saveOptionEdit(dbKey, idx, listId) {
   const input = document.getElementById(listId + '_edit_' + idx);
   const newVal = input.value.trim();
   if (!newVal) { toast('名称不能为空', true); return; }
   if (db[dbKey].includes(newVal) && newVal !== db[dbKey][idx]) { toast('该名称已存在', true); return; }
   db[dbKey][idx] = newVal;
-  saveDB();
+  await saveOption(dbKey, db[dbKey]);
   toast('已修改');
   renderAllOptionLists();
 }
 
-function addOption(dbKey, inputId, listId) {
+async function addOption(dbKey, inputId, listId) {
   const input = document.getElementById(inputId);
   const val = input.value.trim();
   if (!val) { toast('请输入选项名称', true); return; }
   if (db[dbKey].includes(val)) { toast('该选项已存在', true); return; }
   db[dbKey].push(val);
-  saveDB();
+  await saveOption(dbKey, db[dbKey]);
   input.value = '';
   toast('已添加');
   renderOptionList(dbKey, listId);
 }
 
-function delOption(dbKey, idx) {
+async function delOption(dbKey, idx) {
   if (!confirm('确认删除「' + db[dbKey][idx] + '」？已有数据不受影响。')) return;
   db[dbKey].splice(idx, 1);
-  saveDB();
+  await saveOption(dbKey, db[dbKey]);
   toast('已删除');
   renderAllOptionLists();
 }
@@ -2190,13 +2204,18 @@ function importAll() {
   const file = document.getElementById('importFile').files[0];
   if (!file) { toast('请先选择文件', true); return; }
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = async function(e) {
     try {
       const data = JSON.parse(e.target.result);
       if (!data.users || !data.workload) { toast('文件格式不正确', true); return; }
       if (!confirm('导入将覆盖当前所有数据，确认继续？')) return;
-      db = data;
-      saveDB();
+      // 批量导入到Supabase
+      for (const t of TABLES) {
+        if (data[t] && data[t].length) {
+          try { await supabase.from(t).upsert(data[t]); } catch(e) {}
+        }
+      }
+      await loadDB();
       toast('数据导入成功');
       route();
     } catch(err) { toast('文件解析失败', true); }
@@ -2240,11 +2259,16 @@ function renderAdmin(view) {
 // ============================================================
 // 启动
 // ============================================================
-if (restoreSession()) {
-  enterApp();
-} else {
+(async function init() {
   showView('login');
-}
+  document.getElementById('login-error').textContent = '正在连接数据库...';
+  document.getElementById('login-error').style.display = 'block';
+  await loadDB();
+  document.getElementById('login-error').style.display = 'none';
+  if (restoreSession()) {
+    enterApp();
+  }
+})();
 document.getElementById('login-pass').addEventListener('keypress', e => { if (e.key === 'Enter') doLogin(); });
 
 </script>
