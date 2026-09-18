@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Eric仓库管理系统</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/dist/umd/supabase.min.js"></script>
 <style>
 :root {
   --primary: #2563eb; --primary-dark: #1d4ed8; --bg: #f1f5f9; --card: #ffffff;
@@ -209,7 +209,7 @@ tr:hover td { background:#f8fafc; }
 // ============================================================
 const SUPABASE_URL = 'https://qvwzyhngpqjmuryljdtw.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_Ox7fOMiHrhMzlw1QFyHyFQ_eS60XW3j';
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const TABLES = ['users','workload','shipments','problems','losses','arrivals','fixedcosts','salaries','expenses'];
 
@@ -225,17 +225,21 @@ let db = {
 };
 
 async function loadDB() {
+  if (typeof supabase === 'undefined') throw new Error('Supabase SDK未加载');
+  // 测试连接
+  const { data: testData, error: testErr } = await sb.from('users').select('*').limit(1);
+  if (testErr) throw new Error(testErr.message);
   // 加载所有业务表
   for (const t of TABLES) {
     try {
-      const { data, error } = await supabase.from(t).select('*');
+      const { data, error } = await sb.from(t).select('*');
       if (error) { console.warn('loadDB warn:', t, error.message); continue; }
       db[t] = data || [];
     } catch(e) { console.warn('loadDB error:', t, e); }
   }
   // 加载配置
   try {
-    const { data: opts, error } = await supabase.from('app_options').select('*');
+    const { data: opts, error } = await sb.from('app_options').select('*');
     if (!error && opts) {
       opts.forEach(o => { db[o.key] = o.value; });
     }
@@ -248,7 +252,7 @@ async function loadDB() {
 
 async function saveRow(store, obj) {
   // 插入新行到Supabase，返回带id的对象
-  const { data, error } = await supabase.from(store).insert(obj).select().single();
+  const { data, error } = await sb.from(store).insert(obj).select().single();
   if (error) { console.error('saveRow error:', error); toast('保存失败: '+error.message, true); return null; }
   obj.id = data.id;
   if (!db[store]) db[store] = [];
@@ -257,7 +261,7 @@ async function saveRow(store, obj) {
 }
 
 async function updateRow(store, id, obj) {
-  const { error } = await supabase.from(store).update(obj).eq('id', id);
+  const { error } = await sb.from(store).update(obj).eq('id', id);
   if (error) { console.error('updateRow error:', error); toast('更新失败: '+error.message, true); return false; }
   const idx = (db[store]||[]).findIndex(r => r.id === id);
   if (idx >= 0) db[store][idx] = { ...db[store][idx], ...obj, id };
@@ -265,14 +269,14 @@ async function updateRow(store, id, obj) {
 }
 
 async function deleteRow(store, id) {
-  const { error } = await supabase.from(store).delete().eq('id', id);
+  const { error } = await sb.from(store).delete().eq('id', id);
   if (error) { console.error('deleteRow error:', error); toast('删除失败: '+error.message, true); return false; }
   db[store] = (db[store]||[]).filter(r => r.id !== id);
   return true;
 }
 
 async function saveOption(key, value) {
-  const { error } = await supabase.from('app_options').upsert({ key, value });
+  const { error } = await sb.from('app_options').upsert({ key, value });
   if (error) console.error('saveOption error:', error);
   db[key] = value;
 }
@@ -2212,7 +2216,7 @@ function importAll() {
       // 批量导入到Supabase
       for (const t of TABLES) {
         if (data[t] && data[t].length) {
-          try { await supabase.from(t).upsert(data[t]); } catch(e) {}
+          try { await sb.from(t).upsert(data[t]); } catch(e) {}
         }
       }
       await loadDB();
@@ -2261,12 +2265,19 @@ function renderAdmin(view) {
 // ============================================================
 (async function init() {
   showView('login');
-  document.getElementById('login-error').textContent = '正在连接数据库...';
-  document.getElementById('login-error').style.display = 'block';
-  await loadDB();
-  document.getElementById('login-error').style.display = 'none';
-  if (restoreSession()) {
-    enterApp();
+  const errEl = document.getElementById('login-error');
+  try {
+    errEl.textContent = '正在连接数据库...';
+    errEl.style.display = 'block';
+    await loadDB();
+    errEl.style.display = 'none';
+    if (restoreSession()) {
+      enterApp();
+    }
+  } catch(e) {
+    errEl.textContent = '数据库连接失败: ' + e.message;
+    errEl.style.display = 'block';
+    console.error('init error:', e);
   }
 })();
 document.getElementById('login-pass').addEventListener('keypress', e => { if (e.key === 'Enter') doLogin(); });
