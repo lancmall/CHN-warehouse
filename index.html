@@ -224,35 +224,49 @@ let db = {
   tempExpenseCategories: ['国内运费','团建聚餐','接待费用','办公耗材','设备维修','交通费用','其他'],
 };
 
+function dbToCamel(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const out = {};
+  for (const [k,v] of Object.entries(obj)) {
+    out[k.replace(/_([a-z])/g, (_,c) => c.toUpperCase())] = v;
+  }
+  return out;
+}
+function camelToDb(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const out = {};
+  for (const [k,v] of Object.entries(obj)) {
+    out[k.replace(/[A-Z]/g, c => c.toLowerCase())] = v;
+  }
+  return out;
+}
+
 async function loadDB() {
   if (typeof supabase === 'undefined') throw new Error('Supabase SDK未加载');
-  // 测试连接
   const { data: testData, error: testErr } = await sb.from('users').select('*').limit(1);
   if (testErr) throw new Error(testErr.message);
-  // 加载所有业务表
   for (const t of TABLES) {
     try {
       const { data, error } = await sb.from(t).select('*');
       if (error) { console.warn('loadDB warn:', t, error.message); continue; }
-      db[t] = data || [];
+      db[t] = (data || []).map(dbToCamel);
     } catch(e) { console.warn('loadDB error:', t, e); }
   }
-  // 加载配置
   try {
     const { data: opts, error } = await sb.from('app_options').select('*');
-    if (!error && opts) {
-      opts.forEach(o => { db[o.key] = o.value; });
-    }
+    if (!error && opts) { opts.forEach(o => { db[o.key] = o.value; }); }
   } catch(e) { console.warn('loadDB opts error:', e); }
-  // 计算max id
   let maxId = 0;
   TABLES.forEach(t => { (db[t]||[]).forEach(r => { if (r.id > maxId) maxId = r.id; }); });
   db.seq = maxId + 1;
 }
 
 async function saveRow(store, obj) {
-  // 插入新行到Supabase，返回带id的对象
-  const { data, error } = await sb.from(store).insert(obj).select().single();
+  const dbObj = camelToDb({...obj});
+  delete dbObj.id;
+  delete dbObj.createdat;
+  delete dbObj.createdby;
+  const { data, error } = await sb.from(store).insert(dbObj).select().single();
   if (error) { console.error('saveRow error:', error); toast('保存失败: '+error.message, true); return null; }
   obj.id = data.id;
   if (!db[store]) db[store] = [];
@@ -261,7 +275,8 @@ async function saveRow(store, obj) {
 }
 
 async function updateRow(store, id, obj) {
-  const { error } = await sb.from(store).update(obj).eq('id', id);
+  const dbObj = camelToDb({...obj});
+  const { error } = await sb.from(store).update(dbObj).eq('id', id);
   if (error) { console.error('updateRow error:', error); toast('更新失败: '+error.message, true); return false; }
   const idx = (db[store]||[]).findIndex(r => r.id === id);
   if (idx >= 0) db[store][idx] = { ...db[store][idx], ...obj, id };
@@ -815,7 +830,7 @@ function staffProblem() {
     {label:'登记日期', name:'date', type:'date', val: today()},
     {label:'店铺/供应商', name:'shopName', type:'text', required:true, full:true},
     {label:'1688平台单号', name:'orderNo1688', type:'text'},
-    {label:'富荣系统单号', name:'orderNoFR', type:'text'},
+    {label:'富荣系统单号', name:'orderNoFr', type:'text'},
     {label:'CM条码', name:'cmCode', type:'text'},
     {label:'商品名称', name:'productName', type:'text'},
     {label:'商品链接', name:'productUrl', type:'text', full:true},
@@ -1179,7 +1194,7 @@ function renderStaff(view) {
 const TABLE_CONFIGS = {
   'admin/workload': { title:'每日工作量', store:'workload', cols:['date','staff','country','inQty','outQty','packQty','startTime','endTime'], colLabels:{date:'日期',staff:'姓名',country:'国家',inQty:'入库',outQty:'出库',packQty:'打包',startTime:'上班',endTime:'下班'}, selectFields:{country:'countries'} },
   'admin/shipment': { title:'发货数据', store:'shipments', cols:['batchNo','date','country','barcode','attr','items','weight','rate','volume','logistics','freight','staff'], colLabels:{batchNo:'批次号',date:'日期',country:'目的国',barcode:'纸箱条码',attr:'商品属性',items:'件数',weight:'重量kg',rate:'单价/kg',volume:'体积m³',logistics:'物流公司',freight:'运费',staff:'录入人'}, selectFields:{country:'countries', attr:'productAttrs'} },
-  'admin/problem': { title:'问题件', store:'problems', cols:['date','shopName','orderNo1688','orderNoFR','cmCode','productName','type','solution','responsible','cost','costType','status'], colLabels:{date:'日期',shopName:'店铺/供应商',orderNo1688:'1688单号',orderNoFR:'富荣单号',cmCode:'CM条码',productName:'商品',type:'类型',solution:'处理方案',responsible:'责任方',cost:'费用',costType:'费用类型',status:'状态'}, selectFields:{type:'problemTypes', solution:'solutionTypes', responsible:'responsibleTypes', costType:['商品费','运输费']} },
+  'admin/problem': { title:'问题件', store:'problems', cols:['date','shopName','orderNo1688','orderNoFr','cmCode','productName','type','solution','responsible','cost','costType','status'], colLabels:{date:'日期',shopName:'店铺/供应商',orderNo1688:'1688单号',orderNoFr:'富荣单号',cmCode:'CM条码',productName:'商品',type:'类型',solution:'处理方案',responsible:'责任方',cost:'费用',costType:'费用类型',status:'状态'}, selectFields:{type:'problemTypes', solution:'solutionTypes', responsible:'responsibleTypes', costType:['商品费','运输费']} },
   'admin/loss': { title:'仓库丢失', store:'losses', cols:['date','country','cmCode','productName','qty','unitPrice','lossAmount'], colLabels:{date:'日期',country:'国家',cmCode:'CM条码',productName:'商品',qty:'数量',unitPrice:'单价',lossAmount:'损失'}, selectFields:{country:'countries'} },
   'admin/arrival': { title:'国际物流到货', store:'arrivals', cols:['date','batchNo','barcode','origin','country','logistics','trackingNo','totalItems','actualItems','lostQty','lostValue','damagedQty','damagedValue','claimParty','freight','staff'], colLabels:{date:'到货日',batchNo:'批次号',barcode:'纸箱条码',origin:'始发国',country:'目的国',logistics:'物流',trackingNo:'运单号',totalItems:'总件数',actualItems:'到货件数',lostQty:'丢件数',lostValue:'丢件损失',damagedQty:'破损数',damagedValue:'破损损失',claimParty:'赔付方',freight:'运费',staff:'录入人'}, selectFields:{country:'countries', claimParty:['物流公司','中国仓库','本地仓库']} },
   'admin/fixedcost': { title:'固定成本', store:'fixedcosts', cols:['month','category','item','amount','remark'], colLabels:{month:'月份',category:'类别',item:'项目',amount:'金额',remark:'备注'}, selectFields:{category:'costCategories'} },
